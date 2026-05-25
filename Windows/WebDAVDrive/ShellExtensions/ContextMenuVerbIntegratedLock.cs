@@ -142,7 +142,7 @@ namespace WebDAVDrive.ShellExtensions
                         if (placeholder.Properties.TryGetActiveLockInfo(out ServerLockInfo lockInfo))
                         {
                             // Detect if locked by this user.
-                            if (!engine.IsCurrentUser(lockInfo.Owner))
+                            if (!placeholder.Properties.IsLockedByThisDevice(lockInfo))
                             {
                                 // Typically we can not unlock items locked by other users.
                                 // We must hide or disable menu in this case.

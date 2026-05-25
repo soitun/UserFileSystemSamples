@@ -80,6 +80,11 @@ namespace ITHit.FileSystem.Samples.Common.Windows
             return syncRoot;
         }
 
+        public void SetDriveName(string syncRootId, string displayName)
+        {
+            ShellExtensionRegistrar.SetDriveName(syncRootId, displayName);
+        }
+
         /*
         /// <summary>
         /// Unregisters sync root, shell extensions, deletes all synced items. 
@@ -329,6 +334,7 @@ namespace ITHit.FileSystem.Samples.Common.Windows
 
             // The read-only attribute is used to indicate that the item is being locked by another user. Do NOT include it into InSyncPolicy.
             storageInfo.InSyncPolicy = StorageProviderInSyncPolicy.Default;
+            storageInfo.HardlinkPolicy = StorageProviderHardlinkPolicy.Allowed;
 
             // Adds columns to Windows File Manager. 
             // Show/hide columns in the "More..." context menu on the columns header in Windows Explorer.

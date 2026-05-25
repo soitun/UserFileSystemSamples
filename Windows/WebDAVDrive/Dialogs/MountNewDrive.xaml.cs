@@ -2,15 +2,19 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.Resources;
 using Windows.System;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 using WebDAVDrive.Services;
-using System.Collections.Generic;
-using System.Linq;
 using ITHit.FileSystem.Windows.WinUI.Dialogs;
+using ITHit.FileSystem.Extensions;
 
 namespace WebDAVDrive.Dialogs
 {
@@ -20,19 +24,40 @@ namespace WebDAVDrive.Dialogs
     public sealed partial class MountNewDrive : DialogWindow
     {
         private readonly ResourceLoader resourceLoader = ResourceLoader.GetForViewIndependentUse();
+
+        private bool displayNameEdited = false;
+
         public MountNewDrive() : base()
         {
             InitializeComponent();
             Resize(800, 400);
             Title = $"{ServiceProvider.GetService<AppSettings>().ProductName} - {resourceLoader.GetString("MountNewDriveWindow/Title")}";
 
+            IDrivesService drivesService = ServiceProvider.GetService<IDrivesService>();
+            RootPathEntry.Text = drivesService.GenerateRootPathForProtocolMounting();
+
             // Resize and center the window.
             SetDefaultPosition();
+        }
+
+        private async void OnBrowseClicked(object sender, RoutedEventArgs e)
+        {
+            FolderPicker folderPicker = new FolderPicker();
+            folderPicker.FileTypeFilter.Add("*");
+
+            nint hwnd = WindowNative.GetWindowHandle(this);
+            InitializeWithWindow.Initialize(folderPicker, hwnd);
+
+            StorageFolder? folder = await folderPicker.PickSingleFolderAsync();
+            if (folder != null)
+                RootPathEntry.Text = folder.Path;
         }
 
         private void OnValidateClicked(object sender, RoutedEventArgs e)
         {
             string url = UrlEntry.Text;
+            string userFileSystemRootPath = RootPathEntry.Text;
+            string displayNameText = DisplayNameEntry.Text;
 
             // Check if the URL entry is empty
             if (string.IsNullOrWhiteSpace(url))
@@ -56,7 +81,8 @@ namespace WebDAVDrive.Dialogs
                     // Mount new domain.
                     _ = Task.Run(async () =>
                     {
-                        (bool success, Exception? exception) result = await drivesService.MountNewAsync(url);
+                        //TODO: pass display name here
+                        (bool success, Exception? exception) result = await drivesService.MountNewAsync(url, userFileSystemRootPath, true, displayNameText);
 
                         if (result.success)
                         {
@@ -124,6 +150,21 @@ namespace WebDAVDrive.Dialogs
             {
                 OnValidateClicked(btnAddDrive, null);
             }
+        }
+
+        //in case user did not edited Display Name field - make default name from updated URL and fill Display Name field by it
+        private void UrlEntryTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (!displayNameEdited)
+            {
+                DisplayNameEntry.Text = PathExtensions.ConvertToDisplayName(UrlEntry.Text);
+            }
+        }
+
+        //once Display Name field is edited by user - do not more generate default name from URL
+        private void DisplayNameKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            displayNameEdited = true;
         }
     }
 }

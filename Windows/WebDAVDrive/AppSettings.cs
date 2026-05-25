@@ -3,39 +3,43 @@ using System.Reflection;
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 
-using ITHit.FileSystem.Samples.Common;
 using ITHit.FileSystem.Synchronization;
+using System.Text.Json.Serialization;
 
 
 namespace WebDAVDrive
 {
     /// <summary>
-    /// Strongly binded project settings.
+    /// Per-drive settings. Each drive has its own URL, mount path, and engine configuration.
     /// </summary>
-    public class AppSettings : Settings
+    public class DriveSettings
     {
         /// <summary>
-        /// IT Hit WebDAV Client Library for .NET License string;
+        /// WebDAV server URL for this drive.
         /// </summary>
-        public string WebDAVClientLicense { get; set; }
+        public string WebDAVServerURL { get; set; }
 
         /// <summary>
-        /// WebDAV server URLs.
+        /// Local folder path where the drive will be mounted.
+        /// Supports environment variables like %USERPROFILE%.
         /// </summary>
-        public string[] WebDAVServerURLs { get; set; }
+        public string UserFileSystemRootPath { get; set; }
 
         /// <summary>
         /// Automatic lock timeout in milliseconds.
         /// </summary>
+        [JsonPropertyName("AutomaticLockTimeout")]
         public double AutoLockTimeoutMs { get; set; }
 
         /// <summary>
         /// Manual lock timeout in milliseconds.
         /// </summary>
+        [JsonPropertyName("ManualLockTimeout")]
         public double ManualLockTimeoutMs { get; set; }
 
-        // <summary>
+        /// <summary>
         /// Controls the number of events in the tray window.
         /// </summary>
         public int TrayMaxHistoryItems { get; set; }
@@ -70,8 +74,12 @@ namespace WebDAVDrive
         public string RequestThumbnailsFor { get; set; }
 
         /// <summary>
-        /// Mark documents locked by other users as read-only for this user and vice versa.
-        /// A read-only MS Office document opens in a view-only mode preventing document collisions.
+        /// Automatically lock the file in remote storage when opened for writing, unlock on close.
+        /// </summary>
+        public bool AutoLock { get; set; }
+
+        /// <summary>
+        /// Mark documents locked by other users as read-only.
         /// </summary>
         public bool SetLockReadOnly { get; set; }
 
@@ -84,6 +92,57 @@ namespace WebDAVDrive
         /// Compare command settings.
         /// </summary>
         public Dictionary<string, string> Compare { get; set; } = new();
+
+        /// <summary>
+        /// Custom columns to display in Windows Explorer.
+        /// </summary>
+        public Dictionary<int, string> CustomColumns { get; set; } = new();
+
+        /// <summary>
+        /// Folder content invalidation period in milliseconds.
+        /// </summary>
+        public double FolderInvalidationIntervalMs { get; set; }
+
+        /// <summary>
+        /// Drive name.
+        /// </summary>
+        public string DriveName { get; set; }
+
+        /// <summary>
+        /// Refresh Windows Explorer when navigating to a folder. Default is true.
+        /// </summary>
+        public bool RefreshExplorerOnFolderNavigation { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Application settings.
+    /// </summary>
+    public class AppSettings
+    {
+        /// <summary>
+        /// Unique ID of this application.
+        /// </summary>
+        public string AppID { get; set; }
+
+        /// <summary>
+        /// Integrated Bundle License activating IT Hit User File System Engine and IT Hit WebDAV Client Library for .NET.
+        /// </summary>
+        public string License { get; set; }
+
+        /// <summary>
+        /// Path to the icons folder.
+        /// </summary>
+        public string IconsFolderPath { get; set; }
+
+        /// <summary>
+        /// Product name. Displayed in every location where product name is required.
+        /// </summary>
+        public string ProductName { get; set; }
+
+        /// <summary>
+        /// Per-drive settings. Each drive is mounted as a separate sync root.
+        /// </summary>
+        public List<DriveSettings> Drives { get; set; } = new();
     }
 
     /// <summary>
@@ -94,37 +153,44 @@ namespace WebDAVDrive
         /// <summary>
         /// Binds, validates and normalizes WebDAV Context configuration.
         /// </summary>
-        /// <param name="configurationSection">Instance of <see cref="IConfigurationSection"/>.</param>
-        /// <param name="settings">Virtual File System Settings.</param>
+        /// <param name="configuration">Instance of <see cref="IConfiguration"/>.</param>
         public static AppSettings ReadSettings(this IConfiguration configuration)
         {
-            AppSettings settings = new AppSettings();
-
             if (configuration == null)
             {
-                throw new ArgumentNullException("configurationSection");
+                throw new ArgumentNullException(nameof(configuration));
             }
+
+            AppSettings settings = new AppSettings();
 
             configuration.Bind(settings);
 
+            settings.Drives.Clear();
 
-            if (settings.WebDAVServerURLs == null || settings.WebDAVServerURLs.Length == 0)
+            foreach (var driveSection in configuration.GetSection("Drives").GetChildren())
             {
-                throw new ArgumentNullException("WebDAVServerURLs");
-            }
-            for (int i = 0; i < settings.WebDAVServerURLs.Length; i++)
-            {
-                settings.WebDAVServerURLs[i] = $"{settings.WebDAVServerURLs[i].TrimEnd('/')}/";
+                DriveSettings drive = new DriveSettings();
+                driveSection.Bind(drive);
+
+                if (string.IsNullOrEmpty(drive.WebDAVServerURL))
+                    continue;
+
+                drive.WebDAVServerURL = $"{drive.WebDAVServerURL.TrimEnd('/')}/";
+
+                if (!string.IsNullOrEmpty(drive.UserFileSystemRootPath))
+                {
+                    drive.UserFileSystemRootPath = Environment.ExpandEnvironmentVariables(drive.UserFileSystemRootPath);
+                }
+
+                drive.MaxTransferConcurrentRequests ??= 6;
+                drive.MaxOperationsConcurrentRequests ??= int.MaxValue;
+
+                settings.Drives.Add(drive);
             }
 
-            if (string.IsNullOrEmpty(settings.UserFileSystemRootPath))
+            if (settings.Drives.Count == 0)
             {
-                throw new ArgumentNullException("Settings.UserFileSystemRootPath");
-            }
-
-            if (!Directory.Exists(settings.UserFileSystemRootPath))
-            {
-                settings.UserFileSystemRootPath = Environment.ExpandEnvironmentVariables(settings.UserFileSystemRootPath);
+                throw new ArgumentException("At least one drive with a WebDAVServerURL is required.", "Drives");
             }
 
             // Icons folder.
@@ -135,16 +201,6 @@ namespace WebDAVDrive
             if (attributes.Length > 0)
             {
                 settings.ProductName = (attributes[0] as AssemblyProductAttribute).Product;
-            }
-
-            if (!settings.MaxTransferConcurrentRequests.HasValue)
-            {
-                settings.MaxTransferConcurrentRequests = 6;
-            }
-
-            if (!settings.MaxOperationsConcurrentRequests.HasValue)
-            {
-                settings.MaxOperationsConcurrentRequests = int.MaxValue;
             }
 
             return settings;

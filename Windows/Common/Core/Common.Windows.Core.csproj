@@ -16,15 +16,15 @@
     <Compile Remove="Logger.cs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="log4net" Version="3.0.3" />
+    <PackageReference Include="log4net" Version="3.3.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.0" />
   </ItemGroup>
   <ItemGroup Condition=" '$(TargetFramework)' == 'net48' ">
     <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.26100.1742" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ITHit.FileSystem.Windows.Package" Version="9.0.29552.0" />
-    <PackageReference Include="ITHit.FileSystem.Windows" Version="9.0.29552.0" />
+    <PackageReference Include="ITHit.FileSystem.Windows.Package" Version="9.1.29632.0" />
+    <PackageReference Include="ITHit.FileSystem.Windows" Version="9.1.29632.0" />
     <ProjectReference Include="..\..\..\Common\Common.csproj" />
   </ItemGroup>
 </Project>

@@ -120,16 +120,16 @@
                                     <ColumnDefinition Width="180" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock x:Uid="OperationStatus" Style="{StaticResource DialogLabelStyle}" />
-                                <TextBlock Text="{Binding OperationStatus}" Style="{StaticResource DialogTextBlockWrapWordsStyle}" />
+                                <TextBlock x:Uid="OperationStatus" Style="{StaticResource DialogLabelStyle}" Grid.Column="0" />
+                                <TextBlock Text="{Binding OperationStatus}" Style="{StaticResource DialogTextBlockWrapWordsStyle}" Grid.Column="1" />
                             </Grid>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="180" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock x:Uid="ExceptionStackTrace" Style="{StaticResource DialogLabelStyle}" />
-                                <TextBlock Text="{Binding ExceptionStackTrace}" Style="{StaticResource DialogTextBlockWrapStyle}" />
+                                <TextBlock x:Uid="ExceptionStackTrace" Style="{StaticResource DialogLabelStyle}" Grid.Column="0" />
+                                <TextBlock Text="{Binding ExceptionStackTrace}" Style="{StaticResource DialogTextBlockWrapStyle}" Grid.Column="1" />
                             </Grid>
                         </StackPanel>
                     </DataTemplate>

@@ -1,9 +1,7 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Web;
 
-namespace WebDAVDrive
+namespace WebDAVMacApp
 {
     /// <summary>
     /// Represents the extracted protocol parameters including Item URLs, Mount URL, and Command.
@@ -26,6 +24,21 @@ namespace WebDAVDrive
         public CommandType Command { get; set; }
 
         /// <summary>
+        /// Gets or sets the license Id.
+        /// </summary>
+        public string? LicenseId { get; set; }
+
+        /// <summary>
+        /// Gets or sets the cookies to be used for authentication or session management.
+        /// </summary>
+        public string? Cookies { get; set; }
+
+        /// <summary>
+        /// Gets or sets the login URL for authentication purposes.
+        /// </summary>
+        public string? LoginUrl { get; set; }
+
+        /// <summary>
         /// Parses the given URI and extracts the Item URLs, Mount URL, and Command.
         /// </summary>
         /// <param name="uri">The input URI to parse.</param>
@@ -39,34 +52,16 @@ namespace WebDAVDrive
             // Extract parameters from the URI.
             Dictionary<string, string> parameters = ParseUriParameters(uri);
 
-            List<string> itemUrls = GetItemUrls(parameters);
-
-            Uri mountUrl;
-            if (!parameters.TryGetValue("MountUrl", out string? mountUrlValue) || string.IsNullOrEmpty(mountUrlValue))
-            {
-                // Take root of first item URL
-                if (itemUrls.Count > 0)
-                {
-                    Uri itemUri = new Uri(itemUrls[0]);
-                    mountUrl = new Uri(itemUri.GetLeftPart(UriPartial.Authority));
-                }
-                else
-                {
-                    throw new ArgumentException("MountUrl is required when no ItemUrl is provided");
-                }
-            }
-            else
-            {
-                mountUrl = new Uri(HttpUtility.UrlDecode(mountUrlValue));
-            }
-
             return new ProtocolParameters
             {
-                ItemUrls = itemUrls,
-                MountUrl = mountUrl,
+                ItemUrls = GetItemUrls(parameters),
+                MountUrl = new Uri(HttpUtility.UrlDecode(parameters["MountUrl"])),
                 Command = parameters.ContainsKey("Command") && Enum.TryParse(HttpUtility.UrlDecode(parameters["Command"]), true, out CommandType command)
                     ? command
-                    : CommandType.Open // Default if parsing fails
+                    : CommandType.Open, // Default if parsing fails
+                LicenseId = parameters.ContainsKey("LicenseId") ? HttpUtility.UrlDecode(parameters["LicenseId"]) : null,
+                Cookies = parameters.ContainsKey("cookies") ? HttpUtility.UrlDecode(parameters["cookies"]) : null,
+                LoginUrl = parameters.ContainsKey("LoginUrl") ? HttpUtility.UrlDecode(parameters["LoginUrl"]) : null
             };
         }
 
@@ -145,3 +140,4 @@ namespace WebDAVDrive
         Edit
     }
 }
+

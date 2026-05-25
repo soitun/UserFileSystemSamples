@@ -135,6 +135,11 @@ namespace VirtualFileSystem
                 return true;
             }
 
+            if (await new AdobeInDesignFilter().FilterAsync(direction, operationType, path, itemType, newPath, operationContext))
+            {
+                return true;
+            }
+
             if (await new FoxitFilter().FilterAsync(direction, operationType, path, itemType, newPath, operationContext))
             {
                 return true;

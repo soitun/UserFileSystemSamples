@@ -255,7 +255,10 @@ namespace WebDAVDrive
         {
             try
             {
-                cancellationTokenSource?.Cancel();
+                if (!disposedValue && cancellationTokenSource != null)
+                {
+                    cancellationTokenSource.Cancel();
+                }
                 handlerChangesTask?.Wait();
 
                 if (clientWebSocket != null
@@ -267,6 +270,11 @@ namespace WebDAVDrive
             catch (WebSocketException ex)
             {
                 Logger.LogMessage($"Failed to close websocket. {ex.Message}", WebSocketServerUrl, null);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Object was already disposed, which is expected during shutdown
+                Logger.LogMessage("RemoteStorageMonitor was already disposed during stop operation", WebSocketServerUrl, null);
             };
 
             Logger.LogMessage("Stoped", WebSocketServerUrl);
@@ -319,7 +327,10 @@ namespace WebDAVDrive
                 {
                     clientWebSocket?.Dispose();
                     cancellationTokenSource?.Dispose();
-                    handlerChangesTask?.Wait();
+                    if (handlerChangesTask != null && handlerChangesTask.Status != TaskStatus.WaitingForActivation)
+                    {
+                        handlerChangesTask.Wait();
+                    }
                     Logger.LogMessage($"Disposed");
                 }
 

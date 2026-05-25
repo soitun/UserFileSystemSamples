@@ -1,8 +1,11 @@
-using System.Threading.Tasks;
-using System.Threading;
-
 using ITHit.FileSystem;
 using ITHit.FileSystem.Samples.Common.Windows;
+using ITHit.FileSystem.Windows.Explorer;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace VirtualDrive
 {
@@ -50,9 +53,48 @@ namespace VirtualDrive
             }
         }
 
+        private ConcurrentDictionary<string, DateTime> FoldersWithColumns = new ConcurrentDictionary<string, DateTime>();
+
+        /// <summary>
+        /// Updates Windows Explorer columns. 
+        /// This method is called when user navigates to a new folder or listing occures in Windows Explorer.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="path">Path for which navigation or listing occured.</param>
+        private void UpdateExplorerColumns(object sender, string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+            
+            // Add columns only one time for each folder.
+            if (!FoldersWithColumns.TryAdd(path, DateTime.UtcNow))
+                return;
+
+            try
+            {
+                var allWindows = WindowsExplorer.GetExplorerWindows(path);
+
+                foreach (var window in allWindows)
+                {
+                    if (window.TryAddColumns(new[] { new ColumnListItem("System.FileAttributes") }).IsSuccess &&
+                        window.TrySetViewMode(FolderViewMode.Details).IsSuccess)
+                    {
+                        window.TryRefresh();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError($"Failed to update Explorer columns for path: {path}", path, null, ex);
+            }
+        }
+
+
         /// <inheritdoc/>
         public override async Task StartAsync(bool processModified = true, CancellationToken cancellationToken = default)
         {
+            WindowsExplorer.FolderNavigation += UpdateExplorerColumns;
+            WindowsExplorer.FolderListing += UpdateExplorerColumns;
             await base.StartAsync(processModified, cancellationToken);
             await RemoteStorageMonitor.StartAsync();
         }
@@ -62,6 +104,8 @@ namespace VirtualDrive
         {
             await base.StopAsync();
             await RemoteStorageMonitor.StopAsync();
+            WindowsExplorer.FolderNavigation -= UpdateExplorerColumns;
+            WindowsExplorer.FolderListing -= UpdateExplorerColumns;
         }
 
         private bool disposedValue;

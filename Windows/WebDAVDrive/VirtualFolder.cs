@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using ITHit.FileSystem;
 using Client = ITHit.WebDAV.Client;
 using ITHit.FileSystem.Synchronization;
+using ITHit.WebDAV.Client.Exceptions;
+using WebDAVDrive.Services;
 
 namespace WebDAVDrive
 {
@@ -54,44 +56,94 @@ namespace WebDAVDrive
             // Send content to remote storage.
             // Get the ETag returned by the server, if any.
             long contentLength = content != null ? content.Length : 0;
-            Client.IWebDavResponse<string> response = (await Dav.UploadAsync(newFileUri, async (outputStream) =>
+
+            using (var uploadDavClient = Engine.CreateWebDavSession(Engine.InstanceId, TimeSpan.FromMinutes(30)))
             {
-                if (content != null)
+                long segmentStartIndex = 0;
+                long segmentSize = -1;
+
+                //before upload starts - retrieve uploaded bytes count from DAV server; if part of file was uploaded - upload the rest, from the next byte
+                try
                 {
-                    // Setting position to 0 is required in case of retry.
-                    content.Position = 0;
-                    await content.CopyToAsync(outputStream);
+                    Client.IWebDavResponse<Client.IFile> serverFileInfo = await uploadDavClient.GetFileAsync(newFileUri, Mapping.GetDavProperties(), null, default);
+                    long bytesOnServer = await serverFileInfo.WebDavResponse.ResumableUpload.GetBytesUploadedAsync();
+                    if (bytesOnServer > 0 && bytesOnServer < contentLength)
+                    {
+                        segmentStartIndex = bytesOnServer;
+                        segmentSize = contentLength - bytesOnServer;
+                    }
                 }
-            }, null, contentLength, 0, -1, null, null, null, cancellationToken));
+                catch (NotFoundException)
+                {
+                    Logger.LogDebug("DAV server does not contain the item - so we upload the whole file to server.");
+                }
+                catch (WebDavException ex)
+                {
+                    Logger.LogDebug($"Error during checking file status on DAV server: {ex.Message}");
+                }
 
-            //switch (response.Status.Code)
-            //{
-            //    case 201: // Client.HttpStatus.Created:
-            //        break;
-            //    case 200: // Client.HttpStatus.OK: The file already exists and eTags matched.
-            //        break;
-            //}
+                //before upload process - set status to false (failed) in storage (for further retrieving on retry)
+                Client.IWebDavResponse<string> response = await uploadDavClient.UploadAsync(newFileUri, async (outputStream) =>
+                {
+                    if (content != null)
+                    {
+                        // Setting position to last byte on server in case of retry.
+                        try
+                        {
+                            content.Position = segmentStartIndex;
+                            await content.CopyToAsync(outputStream);
+                        }
+                        catch (OperationCanceledException ex)
+                        {
+                            Logger.LogMessage("Operation was canceled.", UserFileSystemPath);
+                            inSyncResultContext.SetInSync = false;
+                            inSyncResultContext.Result = new OperationResult(OperationStatus.Locked, 0, "Upload failed. Operation was canceled", ex);
+                        }
+                        catch (ObjectDisposedException ex)
+                        {
+                            Logger.LogMessage("Stream was disposed due to cancellation.", UserFileSystemPath);
+                            inSyncResultContext.SetInSync = false;
+                            inSyncResultContext.Result = new OperationResult(OperationStatus.Locked, 0, "Upload failed. Stream disposed", ex);
+                        }
+                        catch (IOException ex)
+                        {
+                            Logger.LogError("I/O error during upload.", UserFileSystemPath, null, ex, operationContext, metadata);
+                            inSyncResultContext.SetInSync = false;
+                            inSyncResultContext.Result = new OperationResult(OperationStatus.Failed, 0, "Upload failed. I/O error", ex);
+                        }
+                    }
+                }, null, contentLength, segmentStartIndex, segmentSize, null, null, null, cancellationToken);
+
+
+                //switch (response.Status.Code)
+                //{
+                //    case 201: // Client.HttpStatus.Created:
+                //        break;
+                //    case 200: // Client.HttpStatus.OK: The file already exists and eTags matched.
+                //        break;
+                //}
 
 
 
-            // Return newly created item to the Engine.
-            // In the returned data set the following fields:
-            //  - Remote storage item ID. It will be passed to GetFileSystemItem() during next calls.
-            //  - Content eTag. The Engine will store it to determine if the file content should be updated.
-            //  - Medatdata eTag. The Engine will store it to determine if the item metadata should be updated.
+                // Return newly created item to the Engine.
+                // In the returned data set the following fields:
+                //  - Remote storage item ID. It will be passed to GetFileSystemItem() during next calls.
+                //  - Content eTag. The Engine will store it to determine if the file content should be updated.
+                //  - Medatdata eTag. The Engine will store it to determine if the item metadata should be updated.
 
-            byte[] remoteStorageItemId = null;
-            if (response.Headers.Contains("resource-id"))
-            {
-                string remoteStorageId = response.Headers.GetValues("resource-id").FirstOrDefault();
-                remoteStorageItemId = Encoding.UTF8.GetBytes(remoteStorageId);
+                byte[] remoteStorageItemId = null;
+                if (response.Headers.Contains("resource-id"))
+                {
+                    string remoteStorageId = response.Headers.GetValues("resource-id").FirstOrDefault();
+                    remoteStorageItemId = Encoding.UTF8.GetBytes(remoteStorageId);
+                }
+                return new FileMetadata()
+                {
+                    RemoteStorageItemId = remoteStorageItemId,
+                    ContentETag = response.WebDavResponse
+                    // MetadataETag =
+                };
             }
-            return new FileMetadata()
-            {
-                RemoteStorageItemId = remoteStorageItemId,
-                ContentETag = response.WebDavResponse
-                // MetadataETag =
-            };
         }
 
         /// <inheritdoc/>

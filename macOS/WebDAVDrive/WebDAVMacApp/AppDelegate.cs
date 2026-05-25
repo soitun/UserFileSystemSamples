@@ -1,11 +1,14 @@
+using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Web;
 using AppKit;
 using Common.Core;
 using FileProvider;
+using FinderSync;
 using ITHit.FileSystem;
 using ITHit.FileSystem.Mac;
 using WebDAVCommon;
@@ -16,7 +19,6 @@ namespace WebDAVMacApp
     [Register("AppDelegate")]
     public class AppDelegate : NSApplicationDelegate
     {
-        private const string ProtocolPrefix = "fuse:";
         private ILogger Logger = new ConsoleLogger("WebDavFileProviderHostApp");
         private SecureStorage SecureStorage = new SecureStorage();
         private BookmarkUtils BookmarkUtils = new BookmarkUtils(new ConsoleLogger("WebDavFileProviderHostApp"));
@@ -60,8 +62,7 @@ namespace WebDAVMacApp
             StatusItem.Menu.AddItem(exitMenuItem);
 
             Logger.LogMessage("Finished DidFinishLaunching");
-        }
-
+        }        
 
         public override async void OpenUrls(NSApplication application, NSUrl[] urls)
         {
@@ -71,11 +72,10 @@ namespace WebDAVMacApp
             {
                 foreach (NSUrl url in urls)
                 {
-                    Dictionary<string, string> parameters = url.AbsoluteUrl.ToString().Replace(ProtocolPrefix, string.Empty).Split(';').ToDictionary(p => p.Split('=')[0], p => p.Split('=')[1]);
-
-                    Uri itemUrl = new Uri(HttpUtility.UrlDecode(parameters["ItemUrl"]));
-                    Uri webDAVServerUrl = new Uri(HttpUtility.UrlDecode(parameters["MountUrl"]));
-                    string domainIdentifier = webDAVServerUrl.Host;
+                    // Parse protocol Url.
+                    ProtocolParameters protocolParameters = ProtocolParameters.Parse(url);                 
+                    string domainIdentifier = protocolParameters.MountUrl.Host;
+                    Uri webDAVServerUrl = protocolParameters.MountUrl;
 
                     List<string> webDAVServerURLs = (await SecureStorage.GetAsync<List<string>>("WebDAVServerURLs")) ?? new List<string>();
                     Task<bool> taskIsExtensionRegistered = Task.Run<bool>(async () => await Common.Core.Registrar.IsRegisteredAsync(domainIdentifier));
@@ -125,23 +125,32 @@ namespace WebDAVMacApp
                             }
 
                             await SecureStorage.SetAsync("WebDAVServerURLs", webDAVServerURLs);
-
+                            
                             Install(DomainsMenuItems[domainIdentifier].installMenu, null, false);
                         }
-                    }
+                    }             
 
-                    // Open item url.
+                    // Open item urls.
                     NSFileProviderManager fileProviderManager = NSFileProviderManager.FromDomain(await Common.Core.Registrar.GetDomainAsync(domainIdentifier));
                     NSUrl domainPath = await fileProviderManager.GetUserVisibleUrlAsync(NSFileProviderItemIdentifier.RootContainer);
-                    string itemPath = Path.Combine(domainPath.Path, itemUrl.AbsoluteUri.Substring(webDAVServerUrl.AbsoluteUri.Length).TrimStart('/'));
 
-                    if (File.Exists(itemPath) || Directory.Exists(itemPath))
+                    foreach (var itemUrl in protocolParameters.ItemUrls)
                     {
-                        OpenLocalItem(domainIdentifier, itemPath, domainPath);
-                    }
-                    else
-                    {
-                        await ShowLoginDialogAsync(domainIdentifier, () => OpenLocalItem(domainIdentifier, itemPath, domainPath));
+                        string itemPath = Path.Combine(domainPath.Path!, itemUrl.Substring(webDAVServerUrl.AbsoluteUri.Length).TrimStart('/'));
+
+                        bool isFinderSyncExtensionEnabled = await IsFinderSyncExtensionEnabled();
+                        Logger.LogMessage($"isFinderSyncExtensionEnabled: {isFinderSyncExtensionEnabled}");
+                        if (isFinderSyncExtensionEnabled)
+                        {
+                            if (File.Exists(itemPath) || Directory.Exists(itemPath))
+                            {
+                                OpenLocalItem(domainIdentifier, itemPath, domainPath);
+                            }
+                            else
+                            {
+                                await ShowLoginDialogAsync(domainIdentifier, () => OpenLocalItem(domainIdentifier, itemPath, domainPath));
+                            }
+                        }
                     }
                 }
             }
@@ -151,6 +160,23 @@ namespace WebDAVMacApp
             }
 
             Logger.LogMessage($"OpenUrls - finish");
+        }
+
+        private async Task<bool> IsFinderSyncExtensionEnabled()
+        {
+            if (!FIFinderSyncController.ExtensionEnabled)
+                FIFinderSyncController.ShowExtensionManagementInterface();
+            else
+                return true;
+
+
+            int i = 0;
+            while (!FIFinderSyncController.ExtensionEnabled)
+            {
+                await Task.Delay(3 * 1000);
+                if (i++ > 20) return false;
+            }
+            return true;
         }
 
         private void OpenLocalItem(string domainIdentifier, string itemPath, NSUrl domainPath)
@@ -245,7 +271,7 @@ namespace WebDAVMacApp
             }
             else
             {
-                NSAlert alert = NSAlert.WithMessage("Auth method not found.", null, null, null, "");
+                NSAlert alert = NSAlert.WithMessage("Something went wrong. Please open your drive in Finder and review the error message.", null, null, null, "");
                 alert.RunModal();
             }
         }

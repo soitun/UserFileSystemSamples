@@ -118,7 +118,7 @@ namespace WebDAVDrive.ShellExtensions
             //    ITHit.FileSystem.Windows.AppHelper.Utilities.TryCompare(placeholder.Path, res.ShadowFilePath);
             //}
 
-            _ = ServiceProvider.DispatcherQueue.TryEnqueue(() => new Compare(userFileSystemPath, engine, (engine as VirtualEngine).Settings.Compare,
+            _ = ServiceProvider.DispatcherQueue.TryEnqueue(() => new Compare(userFileSystemPath, engine, (engine as VirtualEngine).DriveSettings.Compare,
                     ServiceProvider.GetService<AppSettings>().ProductName).Show());
         }
 

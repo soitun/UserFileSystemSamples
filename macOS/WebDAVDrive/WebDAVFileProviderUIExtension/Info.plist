@@ -51,7 +51,7 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>FPUIActionExtension</string>
 		<key>NSExtensionFileProviderDocumentGroup</key>
-		<string>H9B9JEKY3W.group.com.webdav.vfs</string>
+			<string>group.com.webdav.vfs</string>
 	</dict>
 </dict>
 </plist>

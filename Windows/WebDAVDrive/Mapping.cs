@@ -142,10 +142,10 @@ namespace WebDAVDrive
                 metadata.RemoteStorageParentItemId = GetPropertyByteValue(remoteStorageItem, "parent-resource-id");
                 metadata.MetadataETag = GetPropertyStringValue(remoteStorageItem, "metadata-Etag");
                 metadata.Name = remoteStorageItem.DisplayName;
-                metadata.CreationTime = remoteStorageItem.CreationDate;
-                metadata.LastWriteTime = remoteStorageItem.LastModified;
-                metadata.LastAccessTime = remoteStorageItem.LastModified;
-                metadata.ChangeTime = remoteStorageItem.LastModified;
+                metadata.CreationTime = GetSafeDateTime(remoteStorageItem.CreationDate) ?? DateTimeOffset.UtcNow;
+                metadata.LastWriteTime = GetSafeDateTime(remoteStorageItem.LastModified) ?? metadata.CreationTime;
+                metadata.LastAccessTime = GetSafeDateTime(remoteStorageItem.LastModified) ?? metadata.CreationTime;
+                metadata.ChangeTime = GetSafeDateTime(remoteStorageItem.LastModified) ?? metadata.CreationTime;
 
                 // Add custom properties to metadata.Properties list.
 
@@ -180,8 +180,8 @@ namespace WebDAVDrive
                 if (e.Operation == PropertyOperation.Save)
                 {
                     if (e.Metadata.Properties.TryGetActiveLockInfo(out var lockInfo))
-                    {
-                        if (!engine.IsCurrentUser(lockInfo.Owner))
+                    {                
+                        if (!engine.Placeholders.GetItem(e.Path).Properties.IsLockedByThisDevice(lockInfo))
                         {
                             new FileInfo(e.Path).IsReadOnly = true;
                         }
@@ -229,6 +229,22 @@ namespace WebDAVDrive
             return resultValue;
         }
 
+
+        /// <summary>
+        /// Returns a safe DateTimeOffset value that can be used safely.
+        /// If the input date is invalid (e.g., DateTime.MinValue), returns null.
+        /// </summary>
+        /// <param name="dateTime">The DateTime value to validate.</param>
+        /// <returns>A valid DateTimeOffset that can be safely used.</returns>
+        private static DateTimeOffset? GetSafeDateTime(DateTime dateTime)
+        {
+            // DateTimeOffset cannot represent dates before DateTimeOffset.MinValue, so we check for that.
+            if (dateTime == DateTime.MinValue || dateTime < DateTimeOffset.MinValue.UtcDateTime)
+            {
+                return null;
+            }
+            return new DateTimeOffset(dateTime);
+        }
 
         /// <summary>
         /// Gets properties to be returned with each item when listing 

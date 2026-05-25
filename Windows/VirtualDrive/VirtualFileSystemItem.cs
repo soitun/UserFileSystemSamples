@@ -201,7 +201,7 @@ namespace VirtualDrive
                 FileSystemItemPropertyData propertyLockExpires = new FileSystemItemPropertyData()
                 {
                     Id = (int)CustomColumnIds.LockExpirationDate,
-                    Value = lockInfo.LockExpirationDateUtc.ToString(),
+                    Value = lockInfo.LockExpirationDateUtc,
                     IconResource = Path.Combine(Engine.IconsFolderPath, "Empty.ico")
                 };
                 props.Add(propertyLockExpires);
@@ -239,7 +239,7 @@ namespace VirtualDrive
             };
 
             // Save lock-token and lock-mode.
-            operationContext.Properties.SetLockInfo(serverLockInfo);
+            operationContext.Properties.SetThisDeviceLockInfo(serverLockInfo);
 
 
             if (lockMode == LockMode.Auto)

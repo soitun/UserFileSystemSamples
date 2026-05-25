@@ -66,7 +66,7 @@ namespace ITHit.FileSystem.Samples.Common.Windows
         {
             if (properties.TryGetActiveLockInfo(out ServerLockInfo lockInfo))
             {
-                if (properties.GetEngine().IsCurrentUser(lockInfo.Owner))
+                if (properties.IsLockedByThisDevice(lockInfo))
                 {
                     lockToken = lockInfo.LockToken;
                     return true;
@@ -77,13 +77,26 @@ namespace ITHit.FileSystem.Samples.Common.Windows
         }
 
         /// <summary>
+        /// Determines whether the item is locked by this device.
+        /// </summary>
+        /// <param name="properties">Custom data attached to the item.</param>
+        /// <param name="lockInfo">Lock info.</param>
+        public static bool IsLockedByThisDevice(this ICustomData properties, ServerLockInfo lockInfo)
+        {
+            return properties.TryGetValue("ThisDeviceLockToken", out IDataItem deviceLockToken) &&
+                    lockInfo.LockToken.Equals(deviceLockToken.GetValue<string>(), StringComparison.InvariantCultureIgnoreCase) ||
+                    properties.GetEngine().IsCurrentUser(lockInfo.Owner);
+        }
+
+        /// <summary>
         /// Sets lock info.
         /// </summary>
         /// <param name="properties">Custom data attached to the item.</param>
         /// <param name="serverLockInfo">Lock info.</param>
-        public static void SetLockInfo(this ICustomData properties, ServerLockInfo serverLockInfo)
+        public static void SetThisDeviceLockInfo(this ICustomData properties, ServerLockInfo serverLockInfo)
         {
             properties.AddOrUpdate("LockInfo", serverLockInfo);
+            properties.AddOrUpdate("ThisDeviceLockToken", serverLockInfo.LockToken);
         }
 
         /// <summary>

@@ -11,24 +11,37 @@
     <Grid Style="{StaticResource MountNewDriveMainGridStyle}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
-            <RowDefinition Height="44"/>
+            <RowDefinition Height="56"/>
         </Grid.RowDefinitions>
         <StackPanel Grid.Row="0" Style="{StaticResource MountNewDriveMainStackPanelStyle}">
-            <!-- Title -->
-            <TextBlock x:Uid="EnterUrl" Style="{StaticResource MountNewDriveMainTextBlockStyle}" />
-
             <!-- URL Entry TextBox -->
-            <TextBox x:Name="UrlEntry" x:Uid="UrlEntry" Style="{StaticResource MountNewDriveMainTextBoxStyle}" Loaded="UrlEntryLoaded" KeyDown="UrlEntryKeyDown" />
-
+            <TextBlock x:Uid="EnterUrl" Style="{StaticResource MountNewDriveMainTextBlockStyle}" />
+            <TextBox x:Name="UrlEntry" x:Uid="UrlEntry" Style="{StaticResource MountNewDriveMainTextBoxStyle}" Loaded="UrlEntryLoaded" KeyDown="UrlEntryKeyDown"
+                     TextChanged="UrlEntryTextChanged" />
             <!-- Required Validation Message -->
             <TextBlock x:Name="RequiredMessage" x:Uid="UrlRequiredMessage" Style="{StaticResource MountNewDriveErrorStyle}" />
-
             <!-- Validation Message -->
-            <TextBlock x:Name="ValidationMessage" Foreground="Red" Style="{StaticResource MountNewDriveErrorStyle}" />            
+            <TextBlock x:Name="ValidationMessage" Foreground="Red" Style="{StaticResource MountNewDriveErrorStyle}" />
+
+            <!-- Local Folder TextBox -->
+            <TextBlock x:Uid="LocalFolderLabel" Style="{StaticResource MountNewDriveMainTextBlockStyle}" Margin="0,12,0,0"/>
+            <Grid VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="RootPathEntry" Grid.Column="0" Style="{StaticResource MountNewDriveMainTextBoxStyle}" />
+                <winui:CursorButton x:Name="btnBrowse" x:Uid="BrowseButton" Grid.Column="2" Click="OnBrowseClicked" Style="{StaticResource DialogButtonStyle}" VerticalAlignment="Stretch" />
+            </Grid>
+
+            <!-- Display Name TextBox -->
+            <TextBlock x:Uid="DisplayName" Style="{StaticResource MountNewDriveMainTextBlockStyle}" />
+            <TextBox x:Name="DisplayNameEntry" x:Uid="DisplayNameEntry" Style="{StaticResource MountNewDriveMainTextBoxStyle}" KeyDown="DisplayNameKeyDown" />
         </StackPanel>
 
         <!-- Buttons -->
-        <StackPanel Style="{StaticResource DialogButtonsStackPanelStyle}" Grid.Row="1">
+        <StackPanel Style="{StaticResource DialogButtonsStackPanelStyle}" Grid.Row="1" Margin="0,12,0,0">
             <winui:CursorButton x:Uid="Cancel" Click="OnCloseClicked" Style="{StaticResource DialogButtonStyle}" />
             <winui:CursorButton x:Uid="Add" x:Name="btnAddDrive" Click="OnValidateClicked" Style="{StaticResource DialogButtonStyle}" />
         </StackPanel>

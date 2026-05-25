@@ -63,22 +63,27 @@ namespace WebDAVDrive
 
             // Buffer size must be multiple of 4096 bytes for optimal performance.
             const int bufferSize = 0x500000; // 5Mb.
-            using (Client.IDownloadResponse response = await Dav.DownloadAsync(new Uri(RemoteStoragePath), offset, length, null, cancellationToken))
+            
+            // Create a WebDAV session with increased timeout for download operation (30 minutes)
+            using (var downloadDavClient = Engine.CreateWebDavSession(Engine.InstanceId, TimeSpan.FromMinutes(30)))
             {
-                using (Stream stream = await response.GetResponseStreamAsync())
+                using (Client.IDownloadResponse response = await downloadDavClient.DownloadAsync(new Uri(RemoteStoragePath), offset, length, null, cancellationToken))
                 {
-                    try
+                    using (Stream stream = await response.GetResponseStreamAsync())
                     {
-                        await stream.CopyToAsync(output, bufferSize, length, cancellationToken);
+                        try
+                        {
+                            await stream.CopyToAsync(output, bufferSize, length, cancellationToken);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Operation was canceled by the calling Engine.StopAsync() or the operation timeout occured.
+                            Logger.LogMessage($"{nameof(ReadAsync)}({offset}, {length}) canceled", UserFileSystemPath, default, operationContext, metadata);
+                        }
                     }
-                    catch (OperationCanceledException)
-                    {
-                        // Operation was canceled by the calling Engine.StopAsync() or the operation timeout occured.
-                        Logger.LogMessage($"{nameof(ReadAsync)}({offset}, {length}) canceled", UserFileSystemPath, default, operationContext, metadata);
-                    }
+                    // Return content eTag to the Engine.
+                    contentETag = response.Headers.ETag.Tag;
                 }
-                // Return content eTag to the Engine.
-                contentETag = response.Headers.ETag.Tag;
             }
 
             // Return an updated item to the Engine.
@@ -129,15 +134,40 @@ namespace WebDAVDrive
 
                 try
                 {
-                    // Update remote storage file content.
-                    Client.IWebDavResponse<string> response = await Dav.UploadAsync(new Uri(RemoteStoragePath), async (outputStream) =>
+                    // Create a WebDAV session with increased timeout for upload operation (30 minutes)
+                    using (var uploadDavClient = Engine.CreateWebDavSession(Engine.InstanceId, TimeSpan.FromMinutes(30)))
                     {
-                        content.Position = 0; // Setting position to 0 is required in case of retry.
-                        await content.CopyToAsync(outputStream, cancellationToken);
-                    }, null, content.Length, 0, -1, lockTokens, oldContentEtag, null, cancellationToken);
+                        // Update remote storage file content.
+                        Client.IWebDavResponse<string> response = await uploadDavClient.UploadAsync(new Uri(RemoteStoragePath), async (outputStream) =>
+                        {
+                            try
+                            {
+                                content.Position = 0; // Setting position to 0 is required in case of retry.
+                                await content.CopyToAsync(outputStream, cancellationToken);
+                            }
+                            catch (OperationCanceledException ex)
+                            {
+                                Logger.LogMessage("Operation was canceled.", UserFileSystemPath);
+                                inSyncResultContext.SetInSync = false;
+                                inSyncResultContext.Result = new OperationResult(OperationStatus.Locked, 0, "Upload failed. Operation was canceled", ex);
+                            }
+                            catch (ObjectDisposedException ex)
+                            {
+                                Logger.LogMessage("Stream was disposed due to cancellation.", UserFileSystemPath);
+                                inSyncResultContext.SetInSync = false;
+                                inSyncResultContext.Result = new OperationResult(OperationStatus.Locked, 0, "Upload failed. Stream disposed", ex);
+                            }
+                            catch (IOException ex)
+                            {
+                                Logger.LogError("I/O error during upload.", UserFileSystemPath, null, ex, operationContext, metadata);
+                                inSyncResultContext.SetInSync = false;
+                                inSyncResultContext.Result = new OperationResult(OperationStatus.Failed, 0, "Upload failed. I/O error", ex);
+                            }
+                        }, null, content.Length, 0, -1, lockTokens, oldContentEtag, null, cancellationToken);
 
-                    // Return new content eTag back to the Engine.
-                    newContentEtag = response.WebDavResponse;
+                        // Return new content eTag back to the Engine.
+                        newContentEtag = response.WebDavResponse;
+                    }
 
                     if (string.IsNullOrEmpty(newContentEtag))
                     {

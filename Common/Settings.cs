@@ -56,5 +56,10 @@ namespace ITHit.FileSystem.Samples.Common
         /// Get or set the custom columns for the file system items.
         /// </summary>
         public Dictionary<int, string> CustomColumns { get; set; }
+
+        /// <summary>
+        /// Refresh Windows Explorer when navigating to a folder. Default is true.
+        /// </summary>
+        public bool RefreshExplorerOnFolderNavigation { get; set; } = true;
     }
 }

@@ -19,10 +19,12 @@ namespace WebDAVDrive.Services
         IToastNotificationService NotificationService { get; }
         ConcurrentDictionary<Guid, VirtualEngine> Engines { get; }
         ConcurrentDictionary<Guid, EngineWindows> GetEngineWindowsDictionary();
-        Task<(bool success, Exception? exception)> MountNewAsync(string webDAVServerUrl);
+        Task<(bool success, Exception? exception)> MountNewAsync(string webDAVServerUrl, string? userFileSystemRootPath = null,
+            bool showMountingProcess = true, string? displayName = null);
         Task UnMountAsync(Guid? engineId);
         Task InitializeAsync(bool displayMountNewDriveWindow);
         Task EnginesExitAsync();
         Task<VirtualEngine?> EnsureEngineMountedAsync(Uri mountUrl);
+        string GenerateRootPathForProtocolMounting();
     }
 }

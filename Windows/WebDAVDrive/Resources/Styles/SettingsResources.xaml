@@ -8,11 +8,25 @@
         <ResourceDictionary Source="Colors.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
+    <Style x:Name="SettingsRootGridStyle" TargetType="Grid">
+        <Setter Property="Padding" Value="0,20,0,0" />
+        <Setter Property="Background" Value="{StaticResource SettingsBackgroundBrush}" />
+    </Style>
+
     <Style x:Name="SettingsMainGridStyle" TargetType="Grid">
-        <Setter Property="Padding" Value="20" />
+        <Setter Property="Padding" Value="20,0,20,20" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="Background" Value="{StaticResource SettingsBackgroundBrush}" />
     </Style>
+
+    <Style x:Name="SettingsNavigationViewStyle" TargetType="NavigationView">
+        <Setter Property="PaneDisplayMode" Value="Left" />
+        <Setter Property="IsBackButtonVisible" Value="Collapsed" />
+        <Setter Property="IsSettingsVisible" Value="False" />
+        <Setter Property="IsPaneOpen" Value="True" />
+        <Setter Property="IsPaneToggleButtonVisible" Value="False" />
+        <Setter Property="OpenPaneLength" Value="180" />
+    </Style>    
 
     <Style x:Name="SettingsMainStackPanelStyle" TargetType="StackPanel">
         <Setter Property="HorizontalAlignment" Value="Center" />
@@ -29,6 +43,18 @@
     </Style>
 
     <Style x:Name="SettingsTextBlockStyle" TargetType="TextBlock">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <Style x:Name="SettingsHeaderStyle" TargetType="TextBlock">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,0,20" />
+        <Setter Property="FontSize" Value="30" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <Style x:Name="SettingsComboBoxStyle" TargetType="ComboBox">
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Margin" Value="0" />
     </Style>

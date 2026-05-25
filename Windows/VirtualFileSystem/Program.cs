@@ -94,6 +94,8 @@ namespace VirtualFileSystem
                     // Here we disable incoming sync. To get changes from your remote storage using pooling, call the IncomingPooling.ProcessAsync() method.
                     Engine.SyncService.IncomingSyncMode = ITHit.FileSystem.Synchronization.IncomingSyncMode.Disabled;
 
+                    Engine.RefreshExplorerOnFolderNavigation = Settings.RefreshExplorerOnFolderNavigation;
+
                     // Set the remote storage item ID for the root item. It will be passed to the IEngine.GetFileSystemItemAsync()
                     // method as a remoteStorageItemId parameter when a root folder is requested. 
                     // In this sample we do not set the ID becuse in case of a network path the ID is not available.

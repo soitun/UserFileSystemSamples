@@ -1,4 +1,6 @@
 using System;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -10,13 +12,11 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Windows.Storage.Provider;
 using Windows.ApplicationModel.Resources;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using WebDAVDrive.Dialogs;
-using WebDAVDrive.Enums;
 using WinUIEx;
+using System.Windows.Forms;
 
 using ITHit.FileSystem;
+using ITHit.FileSystem.Extensions;
 using ITHit.FileSystem.Samples.Common.Windows;
 using ITHit.FileSystem.Windows;
 using ITHit.FileSystem.Windows.Package;
@@ -25,6 +25,8 @@ using ITHit.FileSystem.Windows.WinUI.ViewModels;
 using ITHit.FileSystem.Windows.WinUI;
 using WindowManager = ITHit.FileSystem.Samples.Common.Windows.WindowManager;
 
+using WebDAVDrive.Dialogs;
+using WebDAVDrive.Enums;
 
 namespace WebDAVDrive.Services
 {
@@ -90,10 +92,11 @@ namespace WebDAVDrive.Services
             trayWindows = new Dictionary<Guid, Tray>();
         }
 
-        public async Task<(bool success, Exception? exception)> MountNewAsync(string webDAVServerUrl)
+        public async Task<(bool success, Exception? exception)> MountNewAsync(string webDAVServerUrl, string? userFileSystemRootPath = null,
+            bool showMountingProcess = true, string? displayName = null)
         {
             // Register sync root and run User File System Engine.
-            (bool success, Exception? exception) result = await TryMountNewAsync(webDAVServerUrl);
+            (bool success, Exception? exception) result = await TryMountNewAsync(webDAVServerUrl, userFileSystemRootPath, showMountingProcess, displayName);
 
             return result;
         }
@@ -102,10 +105,12 @@ namespace WebDAVDrive.Services
         {
             if (engineGuid == null) return;
             Guid engineId = engineGuid.Value;
-            await Registrar.UnregisterSyncRootAsync(Engines[engineId].Path, Engines[engineId].DataPath, LogFormatter.Log);
-
-            // Remove engine from console processor.
-            ConsoleProcessor.Commands.TryRemove(engineId, out _);
+            Tray existingTrayWindow = trayWindows[engineId];
+            ServiceProvider.DispatcherQueue.TryEnqueue(async () =>
+            {
+                existingTrayWindow.HideWindow();
+            });
+            VirtualEngine existingEngine = Engines[engineId];
 
             if (Engines.TryRemove(engineId, out _))
             {
@@ -118,15 +123,19 @@ namespace WebDAVDrive.Services
                 {
                     ServiceProvider.DispatcherQueue.TryEnqueue(async () =>
                     {
-                        Tray existingTrayWindow = trayWindows[engineId];
-                        await trayWindows[engineId].SetEngineAsync(null, null, null);
+                        await existingTrayWindow.SetEngineAsync(null, null, null);
                         AdjustEngineRelatedThings(existingTrayWindow, null);
-                        //as single window is not more connected to engine - add it to dictionary with Guid.Empty
+                        //as single window is not more connected to engine - assign it to defaultTrayWindow
                         trayWindows.Remove(engineId);
                         defaultTrayWindow = existingTrayWindow;
                     });
                 }
             }
+
+            await Registrar.UnregisterSyncRootAsync(existingEngine.Path, existingEngine.DataPath, LogFormatter.Log);
+
+            // Remove engine from console processor.
+            ConsoleProcessor.Commands.TryRemove(engineId, out _);
         }
 
         public async Task EnginesExitAsync()
@@ -139,7 +148,7 @@ namespace WebDAVDrive.Services
                 RemoveTrayWindow(engine.Key);
             }
             //Remove Tray instance without engine - in case it exists
-            RemoveTrayWindow(Guid.Empty);
+            defaultTrayWindow?.Dispose();
         }
 
         public async Task InitializeAsync(bool displayMountNewDriveWindow)
@@ -152,15 +161,46 @@ namespace WebDAVDrive.Services
                 IEnumerable<StorageProviderSyncRootInfo> syncRoots = await Registrar.GetMountedSyncRootsAsync(Settings.AppID, LogFormatter.Log);
                 if (syncRoots.Any())
                 {
-                    // This is an app restart or machine reboot. Roots were already mounted during previous runs. 
+                    // Find new drives not yet registered as sync roots.
+                    var registeredUrls = new HashSet<string>(
+                        syncRoots.Select(r => r.GetRemoteStoragePath().TrimEnd('/')),
+                        StringComparer.OrdinalIgnoreCase);
+
+                    List<DriveSettings> newDrives = new List<DriveSettings>();
+                    foreach (DriveSettings drive in Settings.Drives)
+                    {
+                        if (!registeredUrls.Contains(drive.WebDAVServerURL.TrimEnd('/')))
+                        {
+                            newDrives.Add(drive);
+                        }
+                    }
+
+                    // Mount new drives in background (RunExistingAsync blocks on engine.StartAsync).
+                    foreach (DriveSettings newDrive in newDrives)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                LogFormatter.Log.Info($"Mounting new URL from settings: {newDrive.WebDAVServerURL}");
+                                await MountNewAsync(newDrive.WebDAVServerURL, newDrive.UserFileSystemRootPath, showMountingProcess: false);
+                            }
+                            catch (Exception ex)
+                            {
+                                LogFormatter.Log.Error($"Failed to mount new URL: {newDrive.WebDAVServerURL}", ex);
+                            }
+                        });
+                    }
+
+                    // This is an app restart or machine reboot. Roots were already mounted during previous runs.
                     await RunExistingAsync(syncRoots);
                 }
-                else if (Settings.WebDAVServerURLs.Length != 0)
+                else if (Settings.Drives.Count != 0)
                 {
                     // This is the first run of the app. Mount new drives.
-                    foreach (string webDAVServerUrl in Settings.WebDAVServerURLs)
+                    foreach (DriveSettings drive in Settings.Drives)
                     {
-                        await MountNewAsync(webDAVServerUrl);
+                        await MountNewAsync(drive.WebDAVServerURL, drive.UserFileSystemRootPath);
                     }
                 }
                 else
@@ -276,41 +316,69 @@ namespace WebDAVDrive.Services
                 {
                     string webDAVServerUrl = syncRoot.GetRemoteStoragePath();
 
+                    // Resolve drive-specific settings for this URL (or fall back to defaults).
+                    DriveSettings driveSettings = ResolveDriveSettings(webDAVServerUrl);
+                    //in case DriveName is not in settings - assign real name from registry - to show further on UI
+                    if (string.IsNullOrEmpty(driveSettings.DriveName)) driveSettings.DriveName = ShellExtensionRegistrar.GetDriveName(syncRoot.Id);
+
                     // Run the User File System Engine.
-                    await TryCreateEngineAsync(webDAVServerUrl, syncRoot.Path.Path);
+                    await TryCreateEngineAsync(webDAVServerUrl, syncRoot.Path.Path, driveSettings);
                 }));
             }
 
             Task.WaitAll(tasks.ToArray());
         }
 
-        private async Task<(bool success, Exception? exception)> TryMountNewAsync(string webDAVServerUrl)
+        private async Task<(bool success, Exception? exception)> TryMountNewAsync(string webDAVServerUrl, string? userFileSystemRootPath, bool showMountingProcess,
+            string? displayName)
         {
-            string? userFileSystemRootPath = null;
+            MountingTray? mountingTray = null;
+            if (showMountingProcess)
+            {
+                //show mounting Tray window
+                mountingTray = new MountingTray(ServiceProvider.GetService<AppSettings>().ProductName, webDAVServerUrl, ServiceProvider.DispatcherQueue);
+            }
+            string? resolvedUserFileSystemRootPath = null;
+            DriveSettings driveSettings = ResolveDriveSettings(webDAVServerUrl);
+            bool usingCustomDisplayName = !string.IsNullOrWhiteSpace(displayName); //user mounts new manually via UI - providing display name he wants
+
             try
             {
-                userFileSystemRootPath = GenerateRootPathForProtocolMounting();
-                string displayName = GetDisplayName(webDAVServerUrl);
+                resolvedUserFileSystemRootPath = string.IsNullOrWhiteSpace(userFileSystemRootPath)
+                    ? GenerateRootPathForProtocolMounting()
+                    : userFileSystemRootPath;
+                
+                if (!usingCustomDisplayName)
+                {
+                    displayName = string.IsNullOrEmpty(driveSettings.DriveName) ? PathExtensions.ConvertToDisplayName(webDAVServerUrl) : driveSettings.DriveName;
+                }
+                driveSettings.DriveName = displayName!;
 
                 // Register sync root and create app folders.
                 await Registrar.RegisterSyncRootAsync(
                     GetSyncRootId(webDAVServerUrl),
-                    userFileSystemRootPath,
+                    resolvedUserFileSystemRootPath,
                     webDAVServerUrl,
-                    displayName,
+                    displayName!,
                     Path.Combine(Settings.IconsFolderPath, "Drive.ico"),
-                    Settings.CustomColumns);
+                    driveSettings.CustomColumns);
             }
+            //we dispose mountingTray on error or after engine is created
             catch (Exception ex)
             {
-                LogFormatter.Log.Error($"Failed to mount file system {webDAVServerUrl} {userFileSystemRootPath}", ex);
+                mountingTray?.Dispose();
+                LogFormatter.Log.Error($"Failed to mount file system {webDAVServerUrl} {resolvedUserFileSystemRootPath}", ex);
                 return (false, ex);
             }
             // Run the User File System Engine.
-            return await TryCreateEngineAsync(webDAVServerUrl, userFileSystemRootPath);
+            (bool success, Exception? exception) result = await TryCreateEngineAsync(webDAVServerUrl, resolvedUserFileSystemRootPath!, driveSettings);
+
+            // Dispose mounting tray.
+            mountingTray?.Dispose();
+            return result;
         }
 
-        private async Task<(bool success, Exception? exception)> TryCreateEngineAsync(string webDAVServerUrl, string userFileSystemRootPath)
+        private async Task<(bool success, Exception? exception)> TryCreateEngineAsync(string webDAVServerUrl, string userFileSystemRootPath, DriveSettings driveSettings)
         {
             try
             {
@@ -325,23 +393,26 @@ namespace WebDAVDrive.Services
                     secureStorage,
                     this,
                     LogFormatter,
-                    Settings);
+                    Settings,
+                    driveSettings,
+                    GetSyncRootId(webDAVServerUrl));
 
                 Engines.TryAdd(engine.InstanceId, engine);
                 ConsoleProcessor.Commands.TryAdd(engine.InstanceId, engine.Commands);
 
-                engine.SyncService.SyncIntervalMs = Settings.SyncIntervalMs;
-                engine.SyncService.IncomingSyncMode = VirtualEngine.GetSyncMode(Settings.IncomingSyncMode);
-                engine.MaxTransferConcurrentRequests = Settings.MaxTransferConcurrentRequests.Value;
-                engine.MaxOperationsConcurrentRequests = Settings.MaxOperationsConcurrentRequests.Value;
-                engine.FolderInvalidationIntervalMs = Settings.FolderInvalidationIntervalMs;
+                engine.SyncService.SyncIntervalMs = driveSettings.SyncIntervalMs;
+                engine.SyncService.IncomingSyncMode = VirtualEngine.GetSyncMode(engine.SyncModeSetting);
+                engine.MaxTransferConcurrentRequests = driveSettings.MaxTransferConcurrentRequests.Value;
+                engine.MaxOperationsConcurrentRequests = driveSettings.MaxOperationsConcurrentRequests.Value;
+                engine.FolderInvalidationIntervalMs = driveSettings.FolderInvalidationIntervalMs;
+                engine.RefreshExplorerOnFolderNavigation = driveSettings.RefreshExplorerOnFolderNavigation;
 
                 // Print Engine config, settings, logging headers.
                 await LogFormatter.PrintEngineStartInfoAsync(engine, webDAVServerUrl);
 
                 if (defaultTrayWindow != null)
                 {
-                    await defaultTrayWindow.SetEngineAsync(engine, engine?.Settings?.Compare, engine?.Settings?.TrayMaxHistoryItems);
+                    await defaultTrayWindow.SetEngineAsync(engine, engine?.DriveSettings?.Compare, engine?.DriveSettings?.TrayMaxHistoryItems);
                     AdjustEngineRelatedThings(defaultTrayWindow, engine);
                     //remap single window to new engine in dictionary and clear defaultTrayWindow variable
                     trayWindows.Add(engine!.InstanceId, defaultTrayWindow);
@@ -373,6 +444,78 @@ namespace WebDAVDrive.Services
             }
         }
 
+        /// <summary>
+        /// Resolves <see cref="DriveSettings"/> for a given WebDAV server URL.
+        /// Returns the matching entry from <see cref="AppSettings.Drives"/> if found,
+        /// otherwise returns the first drive entry as a defaults template, or a new instance with library defaults.
+        /// </summary>
+        /// <param name="webDAVServerUrl">The WebDAV server URL to resolve settings for.</param>
+        /// <returns>A non-null <see cref="DriveSettings"/> instance.</returns>
+        private DriveSettings ResolveDriveSettings(string webDAVServerUrl)
+        {
+            string normalized = $"{webDAVServerUrl.TrimEnd('/')}/";
+            DriveSettings? result = null;
+
+            DriveSettings? match = Settings.Drives?
+                .FirstOrDefault(d => string.Equals(d.WebDAVServerURL?.TrimEnd('/') + "/", normalized, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                result = match;
+            }
+
+            // Fall back to first configured drive as a defaults template (covers UI-mounted or protocol-launched drives
+            // that aren't pre-listed in appsettings.json).
+            DriveSettings? template = Settings.Drives?.FirstOrDefault();
+            if (match == null)
+            {
+                result = template != null ?
+                new DriveSettings
+                {
+                    WebDAVServerURL = webDAVServerUrl,
+                    UserFileSystemRootPath = template.UserFileSystemRootPath,
+                    AutoLockTimeoutMs = template.AutoLockTimeoutMs,
+                    ManualLockTimeoutMs = template.ManualLockTimeoutMs,
+                    TrayMaxHistoryItems = template.TrayMaxHistoryItems,
+                    SyncIntervalMs = template.SyncIntervalMs,
+                    MaxTransferConcurrentRequests = template.MaxTransferConcurrentRequests,
+                    MaxOperationsConcurrentRequests = template.MaxOperationsConcurrentRequests,
+                    ThumbnailGeneratorUrl = template.ThumbnailGeneratorUrl,
+                    RequestThumbnailsFor = template.RequestThumbnailsFor,
+                    AutoLock = template.AutoLock,
+                    SetLockReadOnly = template.SetLockReadOnly,
+                    IncomingSyncMode = template.IncomingSyncMode,
+                    Compare = template.Compare,
+                    CustomColumns = template.CustomColumns,
+                    FolderInvalidationIntervalMs = template.FolderInvalidationIntervalMs,
+                    DriveName = template.DriveName
+                } :
+                // No drives configured at all -- emit safe library defaults.
+                new DriveSettings
+                {
+                    WebDAVServerURL = webDAVServerUrl,
+                    MaxTransferConcurrentRequests = 6,
+                    MaxOperationsConcurrentRequests = int.MaxValue
+                };
+            }
+
+            //look whether secure storage has custom settings provided by user (via Settings window UI) for remote URL; if yes - use these properties data instead
+            UserSettingsService userSettingsService = ServiceProvider.GetService<UserSettingsService>();
+            DriveSettings? settingsInStorage = userSettingsService.GetSettings(webDAVServerUrl);
+            if (settingsInStorage != null)
+            {
+                result!.AutoLockTimeoutMs = settingsInStorage.AutoLockTimeoutMs;
+                result.ManualLockTimeoutMs = settingsInStorage.ManualLockTimeoutMs;
+                result.AutoLock = settingsInStorage.AutoLock;
+                result.SetLockReadOnly = settingsInStorage.SetLockReadOnly;
+                result.IncomingSyncMode = settingsInStorage.IncomingSyncMode;
+                result.RefreshExplorerOnFolderNavigation = settingsInStorage.RefreshExplorerOnFolderNavigation;
+                if (settingsInStorage.TrayMaxHistoryItems > 0) result.TrayMaxHistoryItems = settingsInStorage.TrayMaxHistoryItems;
+                if (!string.IsNullOrEmpty(settingsInStorage.DriveName)) result.DriveName = settingsInStorage.DriveName;
+            }
+            return result!;
+        }
+
         private void CreateTrayIcon(VirtualEngine? engine)
         {
             ResourceLoader resourceLoader = ResourceLoader.GetForViewIndependentUse();
@@ -380,7 +523,7 @@ namespace WebDAVDrive.Services
             {
                 
                 // Create Tray window.
-                Tray trayWindow = new Tray(engine, engine?.Settings?.Compare, engine?.TrayMaxHistoryItems);
+                Tray trayWindow = new Tray(engine, engine?.DriveSettings?.Compare, engine?.TrayMaxHistoryItems);
 
                 //Set header text, mount, unmount, start/stop sync handlers here - as Tray does not access to sample related things                    
                 trayWindow.Header = ServiceProvider.GetService<AppSettings>().ProductName;
@@ -394,6 +537,16 @@ namespace WebDAVDrive.Services
                 trayWindow.ErrorDescriptionClick += (viewModel) => ErrorDescriptionClick(viewModel, trayWindow.Engine as VirtualEngine, LogFormatter);
                 trayWindow.LoginMenuItem.Click += (sender, e) => LoginMenuItemClick(trayWindow.Engine as VirtualEngine);
                 trayWindow.LogoutMenuItem.Click += (sender, e) => LogoutMenuItemClick(trayWindow.Engine as VirtualEngine);
+
+                //in case engine not assigned (unmounted) - showing Mount New Drive on tray icon left click;
+                //engine assigned case - handled in Tray itself (show window with animation)
+                trayWindow.NotifyIcon.MouseClick += (sender, e) =>
+                {
+                    if (trayWindow.Engine == null && e.Button == MouseButtons.Left)
+                    {
+                        TrayMountNewDriveClick();
+                    }
+                };
 #if DEBUG
                 MenuFlyoutItem hideShowConsole = new MenuFlyoutItem { Text = resourceLoader.GetString("HideLog") };
                 hideShowConsole.Click += (_, _) => HideShowConsoleClicked(hideShowConsole);
@@ -468,15 +621,10 @@ namespace WebDAVDrive.Services
 
         private void ShowSettingsMenuClick(Tray trayWindow)
         {
-            ServiceProvider.DispatcherQueue.TryEnqueue(() => _ = trayWindow.Engine is VirtualEngine ? new Settings(trayWindow).Show() : false);
+            ServiceProvider.DispatcherQueue.TryEnqueue(() => _ = trayWindow.Engine is VirtualEngine ? new Settings(trayWindow, Registrar).Show() : false);
         }
 
-        private string GetDisplayName(string webDAVServerUrl)
-        {
-            return webDAVServerUrl.Replace("http://", "").Replace("https://", "").TrimEnd('/');
-        }
-
-        private string GenerateRootPathForProtocolMounting()
+        public string GenerateRootPathForProtocolMounting()
         {
             string userProfilePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             string randomName = Path.GetRandomFileName();

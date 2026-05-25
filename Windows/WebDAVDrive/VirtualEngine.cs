@@ -2,6 +2,8 @@ using ITHit.FileSystem;
 using ITHit.FileSystem.Samples.Common.Windows;
 using ITHit.FileSystem.Synchronization;
 using ITHit.FileSystem.Windows;
+using ITHit.FileSystem.Windows.ShellExtension;
+using ITHit.FileSystem.Windows.WinUI.Dialogs;
 using ITHit.WebDAV.Client;
 using ITHit.WebDAV.Client.Exceptions;
 using System;
@@ -24,6 +26,11 @@ namespace WebDAVDrive
         /// Application settings.
         /// </summary>
         public AppSettings Settings;
+
+        /// <summary>
+        /// Per-drive settings for this engine instance.
+        /// </summary>
+        public readonly DriveSettings DriveSettings;
 
         /// <summary>
         /// WebDAV client for accessing the WebDAV server.
@@ -74,6 +81,11 @@ namespace WebDAVDrive
         /// Controls the number of events in the tray window.
         /// </summary>
         public int TrayMaxHistoryItems;
+
+        /// <summary>
+        /// Controls engine's incoming sync mode.
+        /// </summary>
+        public IncomingSyncModeSetting SyncModeSetting;
 
         /// <summary>
         /// Maximum number of login attempts.
@@ -142,6 +154,8 @@ namespace WebDAVDrive
         /// </summary>
         private bool isAuthenticateSucceeded = false;
 
+        public string SyncRootId { get; set; }
+
         /// <summary>
         /// Event fired when the authentication status changes.
         /// </summary>
@@ -166,11 +180,14 @@ namespace WebDAVDrive
             SecureStorageService secureStorageService,
             DrivesService domainsService,
             LogFormatter logFormatter,
-            AppSettings appSettings)
-            : base(appSettings.UserFileSystemLicense, userFileSystemRootPath, remoteStorageRootPath,
-                  appSettings.IconsFolderPath, appSettings.SetLockReadOnly, logFormatter)
+            AppSettings appSettings,
+            DriveSettings driveSettings,
+            string syncRootId)
+            : base(appSettings.License, userFileSystemRootPath, remoteStorageRootPath,
+                  appSettings.IconsFolderPath, driveSettings.SetLockReadOnly, logFormatter)
         {
             Settings = appSettings;
+            DriveSettings = driveSettings;
             productName = appSettings.ProductName;
             appId = appSettings.AppID;
             RemoteStorageRootPath = remoteStorageRootPath;
@@ -181,14 +198,13 @@ namespace WebDAVDrive
 
             Mapping = new Mapping(Path, remoteStorageRootPath);
 
-            //set four main settings from secure storage, and in case storage does nto have them - take defaults from Settings
-            UserSettingsService userSettingsService = ServiceProvider.GetService<UserSettingsService>();
-            UserSettings? userSettings = userSettingsService.GetSettings(remoteStorageRootPath);
-            AutoLockTimeoutMs = userSettings?.AutomaticLockTimeout ?? Settings.AutoLockTimeoutMs;
-            ManualLockTimeoutMs = userSettings?.ManualLockTimeout ?? Settings.ManualLockTimeoutMs;
-            SetLockReadOnly = userSettings?.SetLockReadOnly ?? Settings.SetLockReadOnly;
-            AutoLock = userSettings?.AutoLock ?? Settings.AutoLock;
-            TrayMaxHistoryItems = userSettings?.TrayMaxHistoryItems > 0 ? userSettings.TrayMaxHistoryItems : Settings.TrayMaxHistoryItems;
+            AutoLockTimeoutMs = DriveSettings.AutoLockTimeoutMs;
+            ManualLockTimeoutMs = DriveSettings.ManualLockTimeoutMs;
+            SetLockReadOnly = DriveSettings.SetLockReadOnly;
+            AutoLock = DriveSettings.AutoLock;
+            TrayMaxHistoryItems = DriveSettings.TrayMaxHistoryItems;
+            SyncModeSetting = DriveSettings.IncomingSyncMode;
+            SyncRootId = syncRootId;
 
             DavClient = CreateWebDavSession(InstanceId);
 
@@ -230,13 +246,13 @@ namespace WebDAVDrive
 
             await InitAsync(cancellationToken);
 
-            Logger.LogMessage($"Sync mode: {Settings.IncomingSyncMode}", Path);
+            Logger.LogMessage($"Sync mode: {SyncModeSetting}", Path);
 
             await base.StartAsync(processChanges, cancellationToken);
             LoginStatusChanged(this, DavClientCredentialsSet ? EngineAuthentificationStatus.LoggedIn : EngineAuthentificationStatus.Anonymous);
 
             // Create and start monitor, depending on server capabilities and prefered SyncMode.
-            RemoteStorageMonitor = await StartRemoteStorageMonitorAsync(Settings.IncomingSyncMode, cancellationToken);
+            RemoteStorageMonitor = await StartRemoteStorageMonitorAsync(SyncModeSetting);
 
             Logger.LogMessage($"Actual sync mode: {SyncService.IncomingSyncMode}", Path);
         }
@@ -344,7 +360,7 @@ namespace WebDAVDrive
         /// </summary>
         /// <param name="preferedSyncMode">Prefered sync mode.</param>
         /// <returns>Remote storage monitor or null if sync mode is not supported or sockets failed to connect.</returns>
-        private async Task<RemoteStorageMonitorBase> StartRemoteStorageMonitorAsync(IncomingSyncModeSetting preferedSyncMode, CancellationToken cancellationToken)
+        private async Task<RemoteStorageMonitorBase> StartRemoteStorageMonitorAsync(IncomingSyncModeSetting preferedSyncMode)
         {
             RemoteStorageMonitorBase monitor = null;
             try
@@ -399,12 +415,24 @@ namespace WebDAVDrive
         public override async Task StopAsync()
         {
             await base.StopAsync();
-            if (RemoteStorageMonitor != null)
-            {
-                await RemoteStorageMonitor?.StopAsync();
-                RemoteStorageMonitor?.Dispose();
-                RemoteStorageMonitor = null;
-            }
+            await StopRemoteStorageMonitor();
+        }
+
+        /// <summary>
+        /// Stops existing remote storage monitor (it it exists); and then starts new instance of the monitor,
+        /// corresponding to current incoming sync mode setting.
+        /// </summary>
+        public async void RestartMonitor()
+        {
+            //if monitor exists - stop and dispose it
+            await StopRemoteStorageMonitor();
+
+            //reassign SyncService.IncomingSyncMode, as it changed
+            SyncService.IncomingSyncMode = GetSyncMode(SyncModeSetting);
+
+            //start new monitor due to updated sync settings
+            RemoteStorageMonitor = await StartRemoteStorageMonitorAsync(SyncModeSetting);
+            Logger.LogMessage($"Actual sync mode: {SyncService.IncomingSyncMode}", Path);
         }
 
 
@@ -487,6 +515,20 @@ namespace WebDAVDrive
         }
 
         /// <summary>
+        /// Stops current remote storage monitor (if it exists).
+        /// </summary>
+        /// <returns></returns>
+        private async Task StopRemoteStorageMonitor()
+        {
+            if (RemoteStorageMonitor != null)
+            {
+                await RemoteStorageMonitor.StopAsync();
+                RemoteStorageMonitor?.Dispose();
+                RemoteStorageMonitor = null;
+            }
+        }
+
+        /// <summary>
         /// Gets remote storage metadata for the root folder.
         /// </summary>
         private async Task<IMetadata> GetRootRemoteStorageMetadata(string webDAVServerUrl, CancellationToken cancellationToken)
@@ -510,7 +552,8 @@ namespace WebDAVDrive
         /// Creates and configures WebDAV client to access the remote storage.
         /// </summary>
         /// <param name="engineInstanceId">Engine instance ID to be sent with every request to the remote storage.</param>
-        private WebDavSession CreateWebDavSession(Guid engineInstanceId)
+        /// <param name="timeout">Optional timeout for the WebDAV client. If null, uses default 10 minutes.</param>
+        public WebDavSession CreateWebDavSession(Guid engineInstanceId, TimeSpan? timeout = null)
         {
             System.Net.Http.HttpClientHandler handler = new System.Net.Http.HttpClientHandler()
             {
@@ -520,8 +563,8 @@ namespace WebDAVDrive
                 // This option improves performance but is less secure. 
                 // PreAuthenticate = true,
             };
-            WebDavSession davClient = new WebDavSession(Settings.WebDAVClientLicense);
-            davClient.Client.Timeout = TimeSpan.FromMinutes(10);
+            WebDavSession davClient = new WebDavSession(Settings.License);
+            davClient.Client.Timeout = timeout ?? TimeSpan.FromMinutes(10);
 
             davClient.WebDavError += DavClient_WebDavError;
             davClient.WebDavMessage += DavClient_WebDAVMessage;
@@ -529,7 +572,14 @@ namespace WebDAVDrive
             // Is required for IIS WebDAV server to avoid 417 Expectation Failed response.
             davClient.Client.DefaultRequestHeaders.ExpectContinue = false;
 
-            if (secureStorage.TryGetSensitiveData(CredentialsStorageKey, out BasicAuthCredentials credentials))
+            if (DavClient != null)
+            {
+                // Copy existing cookies and credentials.
+                CookieCollection existingCookies = DavClient.CookieContainer.GetAllCookies();
+                davClient.CookieContainer.Add(existingCookies);
+                davClient.Credentials = DavClient.Credentials;
+            }
+            else if (secureStorage.TryGetSensitiveData(CredentialsStorageKey, out BasicAuthCredentials credentials))
             {
                 davClient.Credentials = new NetworkCredential(credentials.UserName, credentials.Password);
             }
@@ -724,5 +774,7 @@ namespace WebDAVDrive
             }
             base.Dispose(disposing);
         }
+
+
     }
 }

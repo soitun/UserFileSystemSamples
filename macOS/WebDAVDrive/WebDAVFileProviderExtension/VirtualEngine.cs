@@ -71,8 +71,16 @@ namespace WebDAVFileProviderExtension
 
             SecureStorage = new SecureStorage(domain.Identifier);
 
-            // Get WebDAV url from user settings.
-            WebDAVServerUrl = SecureStorage.GetAsync(domain.Identifier, false).Result;
+            // Get WebDAV url from user settings, fall back to appsettings if shared storage is inaccessible.
+            string serverUrlFromStorage = null;
+            try { serverUrlFromStorage = SecureStorage.GetAsync(domain.Identifier, false).Result; }
+            catch
+            {
+                Logger.LogError($"{domain.Identifier} reading settings failed.");
+            }
+            WebDAVServerUrl = !string.IsNullOrWhiteSpace(serverUrlFromStorage)
+                ? serverUrlFromStorage
+                : AppGroupSettings.Settings.Value.WebDAVServerURLs.FirstOrDefault();
 
             AutoLock = AppGroupSettings.Settings.Value.AutoLock;
             AutoLockTimoutMs = AppGroupSettings.Settings.Value.AutoLockTimoutMs;
@@ -84,7 +92,7 @@ namespace WebDAVFileProviderExtension
             // set remote root storage item id.
             SetRemoteStorageRootItemId(GetRootStorageItemIdAsync().Result);            
 
-            Logger.LogMessage("Engine started.");
+            Logger.LogMessage("Engine started. v2");
         }
 
         /// <inheritdoc/>

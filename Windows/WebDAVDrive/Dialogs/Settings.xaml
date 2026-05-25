@@ -5,91 +5,178 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:dialogs="using:ITHit.FileSystem.Windows.WinUI.Dialogs"
     xmlns:winui="using:ITHit.FileSystem.Windows.WinUI"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <Grid Style="{StaticResource SettingsMainGridStyle}">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="44"/>
-        </Grid.RowDefinitions>
-        <StackPanel Grid.Row="0" Style="{StaticResource SettingsMainStackPanelStyle}">
-            <Grid Style="{StaticResource SettingsGridStyle}" >
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="100" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
-                    <TextBlock x:Uid="EnableAutomaticLocking" Style="{StaticResource SettingsTextBlockStyle}" />
-                    <TextBlock x:Uid="EnableAutomaticLockingDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+
+    <Grid Style="{StaticResource SettingsRootGridStyle}">
+        <controls:NavigationView Style="{StaticResource SettingsNavigationViewStyle}" x:Name="NavView" SelectionChanged="NavView_SelectionChanged">
+            <controls:NavigationView.Resources>
+                <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="{ThemeResource SettingsBackgroundColor}" />
+            </controls:NavigationView.Resources>
+            <controls:NavigationView.MenuItems>
+                <controls:NavigationViewItem x:Uid="MainSettingsTab" Tag="settings">
+                    <controls:NavigationViewItem.Icon>
+                        <controls:SymbolIcon Symbol="Setting" />
+                    </controls:NavigationViewItem.Icon>
+                </controls:NavigationViewItem>
+
+                <controls:NavigationViewItem x:Uid="AboutSettingsTab" Tag="about">
+                    <controls:NavigationViewItem.Icon>
+                        <controls:SymbolIcon Symbol="ContactInfo" />
+                    </controls:NavigationViewItem.Icon>
+                </controls:NavigationViewItem>
+            </controls:NavigationView.MenuItems>
+
+            <Grid Style="{StaticResource SettingsMainGridStyle}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <ScrollViewer Grid.Row="0" x:Name="SettingsPage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Style="{StaticResource SettingsMainStackPanelStyle}">
+                        <TextBlock x:Uid="MainSettingsTabHeader" Style="{StaticResource SettingsHeaderStyle}" />
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0" Margin="0,0,20,0" VerticalAlignment="Center">
+                                <TextBlock x:Uid="EnginePathLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                            </StackPanel>
+                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="EnginePath" Grid.Column="0" Style="{StaticResource SettingsTextBoxStyle}" IsReadOnly="True" HorizontalAlignment="Stretch" />
+                                <winui:CursorButton x:Name="CopyEnginePath" x:Uid="CopyPathButton" Grid.Column="1" Click="CopyPathClicked"
+                                    Style="{StaticResource DialogButtonStyle}" Margin="12,0,0,0" MinWidth="80" MinHeight="32" />
+                            </Grid>
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="250" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="DriveNameLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="DriveNameLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
+                                <TextBox x:Name="DriveName" Style="{StaticResource SettingsTextBoxStyle}" />
+                                <TextBlock x:Name="DriveNameRequiredMessage" x:Uid="RequiredSettingMessage" Style="{StaticResource SettingsErrorStyle}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}" >
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="EnableAutomaticLocking" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="EnableAutomaticLockingDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="AutoLockEnable" x:Uid="Toggle" Grid.Column="1" Style="{StaticResource SettingsToggleStyle}" />
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="AutomaticLockTimeoutLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="AutomaticLockTimeoutLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
+                                <TextBox x:Name="AutomaticLockTimeout" Style="{StaticResource SettingsTextBoxStyle}" />
+                                <TextBlock x:Name="AutomaticRequiredMessage" x:Uid="RequiredSettingMessage" Style="{StaticResource SettingsErrorStyle}" />
+                                <TextBlock x:Name="AutomaticValidationMessage" x:Uid="AutomaticValidationMessage" Style="{StaticResource SettingsErrorStyle}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="ManualLockTimeoutLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="ManualLockTimeoutLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
+                                <TextBox x:Name="ManualLockTimeout" Style="{StaticResource SettingsTextBoxStyle}" />
+                                <TextBlock x:Name="ManualValidationMessage" x:Uid="ManualValidationMessage" Style="{StaticResource SettingsErrorStyle}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="ReadOnlyOnLockedFilesLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="ReadOnlyOnLockedFilesLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Uid="BottomToggle" x:Name="ReadOnlyOnLockedFiles" Grid.Column="1" Style="{StaticResource SettingsToggleStyle}" />
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="TrayMaxHistoryItemsLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="TrayMaxHistoryItemsLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
+                                <TextBox x:Name="TrayMaxHistoryItems" Style="{StaticResource SettingsTextBoxStyle}" />
+                                <TextBlock x:Name="TrayMaxHistoryItemsRequiredMessage" x:Uid="RequiredSettingMessage" Style="{StaticResource SettingsErrorStyle}" />
+                                <TextBlock x:Name="TrayMaxHistoryItemsValidationMessage" x:Uid="TrayMaxHistoryItemsValidationMessage" Style="{StaticResource SettingsErrorStyle}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="PushSynchronizationModeLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="PushSynchronizationModeLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
+                                <ComboBox x:Name="PushSynchronizationModeComboBox" Style="{StaticResource SettingsComboBoxStyle}"
+                              DisplayMemberPath="FriendlyName" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Style="{StaticResource SettingsGridStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="100" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
+                                <TextBlock x:Uid="RefreshExplorerOnFolderNavigationLabel" Style="{StaticResource SettingsTextBlockStyle}" />
+                                <TextBlock x:Uid="RefreshExplorerOnFolderNavigationLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Uid="BottomToggle" x:Name="RefreshExplorerOnFolderNavigation" Grid.Column="1" Style="{StaticResource SettingsToggleStyle}" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+                <StackPanel Grid.Row="0" Style="{StaticResource SettingsMainStackPanelStyle}" x:Name="AboutPage" Visibility="Collapsed">
+                    <TextBlock x:Uid="AboutSettingsTabHeader" Style="{StaticResource SettingsHeaderStyle}" />
+                    <TextBlock x:Name="VersionLabel" Style="{StaticResource SettingsTextBlockStyle}" />
                 </StackPanel>
-                <ToggleSwitch x:Name="AutoLockEnable" x:Uid="Toggle" Grid.Column="1" Style="{StaticResource SettingsToggleStyle}" />
             </Grid>
 
-            <Grid Style="{StaticResource SettingsGridStyle}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="100" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
-                    <TextBlock x:Uid="AutomaticLockTimeoutLabel" Style="{StaticResource SettingsTextBlockStyle}" />
-                    <TextBlock x:Uid="AutomaticLockTimeoutLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
-                </StackPanel>
-                <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
-                    <TextBox x:Name="AutomaticLockTimeout" Style="{StaticResource SettingsTextBoxStyle}" />
-                    <TextBlock x:Name="AutomaticRequiredMessage" x:Uid="RequiredSettingMessage" Style="{StaticResource SettingsErrorStyle}" />
-                    <TextBlock x:Name="AutomaticValidationMessage" x:Uid="AutomaticValidationMessage" Style="{StaticResource SettingsErrorStyle}" />
-                </StackPanel>
-            </Grid>
-
-            <Grid Style="{StaticResource SettingsGridStyle}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="100" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
-                    <TextBlock x:Uid="ManualLockTimeoutLabel" Style="{StaticResource SettingsTextBlockStyle}" />
-                    <TextBlock x:Uid="ManualLockTimeoutLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
-                </StackPanel>
-                <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
-                    <TextBox x:Name="ManualLockTimeout" Style="{StaticResource SettingsTextBoxStyle}" />
-                    <TextBlock x:Name="ManualValidationMessage" x:Uid="ManualValidationMessage" Style="{StaticResource SettingsErrorStyle}" />
-                </StackPanel>
-            </Grid>
-
-            <Grid Style="{StaticResource SettingsGridStyle}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="100" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
-                    <TextBlock x:Uid="ReadOnlyOnLockedFilesLabel" Style="{StaticResource SettingsTextBlockStyle}" />
-                    <TextBlock x:Uid="ReadOnlyOnLockedFilesLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
-                </StackPanel>
-                <ToggleSwitch x:Uid="BottomToggle" x:Name="ReadOnlyOnLockedFiles" Grid.Column="1" Style="{StaticResource SettingsToggleStyle}" />
-            </Grid>
-
-            <Grid Style="{StaticResource SettingsGridStyle}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="100" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Style="{StaticResource SettingsStackPanel}" Grid.Column="0">
-                    <TextBlock x:Uid="TrayMaxHistoryItemsLabel" Style="{StaticResource SettingsTextBlockStyle}" />
-                    <TextBlock x:Uid="TrayMaxHistoryItemsLabelDescription" Style="{StaticResource SettingsDescriptionStyle}" />
-                </StackPanel>
-                <StackPanel Style="{StaticResource SettingsStackPanelWithTextBox}" Grid.Column="1">
-                    <TextBox x:Name="TrayMaxHistoryItems" Style="{StaticResource SettingsTextBoxStyle}" />
-                    <TextBlock x:Name="TrayMaxHistoryItemsRequiredMessage" x:Uid="RequiredSettingMessage" Style="{StaticResource SettingsErrorStyle}" />
-                    <TextBlock x:Name="TrayMaxHistoryItemsValidationMessage" x:Uid="TrayMaxHistoryItemsValidationMessage" Style="{StaticResource SettingsErrorStyle}" />
-                </StackPanel>
-            </Grid>
-        </StackPanel>
-
-        <!-- Buttons -->
-        <StackPanel Style="{StaticResource DialogButtonsStackPanelStyle}" Grid.Row="1">
-            <winui:CursorButton x:Uid="Cancel" Click="OnCloseClicked" Style="{StaticResource DialogButtonStyle}" />
-            <winui:CursorButton x:Uid="Save" Click="OnSaveClicked" Style="{StaticResource DialogButtonStyle}" />
-        </StackPanel>
+        </controls:NavigationView>
     </Grid>
+
 </dialogs:DialogWindow>

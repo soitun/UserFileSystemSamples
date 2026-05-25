@@ -145,9 +145,17 @@
     <value>Invalid URL. Please enter a valid URL.</value>
     <comment>Invalid URL validation text</comment>
   </data>
+  <data name="LocalFolderLabel.Text" xml:space="preserve">
+    <value>Local folder</value>
+    <comment>Local folder label (Mount New Drive dialog)</comment>
+  </data>
   <data name="MountNewDriveButton.Content" xml:space="preserve">
     <value>Mount New Drive</value>
     <comment>Mount New Drive button label</comment>
+  </data>
+  <data name="BrowseButton.Content" xml:space="preserve">
+    <value>Browse...</value>
+    <comment>Browse folder button label (Mount New Drive dialog)</comment>
   </data>
   <data name="Startup.Title" xml:space="preserve">
     <value>Startup</value>
@@ -245,6 +253,18 @@
     <value>Automatically lock the file in remote storage when a file handle is being opened for writing, unlock on close. This enables automatic locking of MS Office documents when opened for editing.</value>
     <comment>Enable automatic locking description (settings)</comment>
   </data>
+  <data name="EnginePathLabel.Text" xml:space="preserve">
+    <value>Mount folder</value>
+    <comment>Engine local mount folder path label (settings)</comment>
+  </data>
+  <data name="CopyPathButton.Content" xml:space="preserve">
+    <value>Copy</value>
+    <comment>Copy mount folder path button label (settings)</comment>
+  </data>
+  <data name="CopyPathButtonCopied.Content" xml:space="preserve">
+    <value>Copied</value>
+    <comment>Copy mount folder path button label after copy action (settings)</comment>
+  </data>
   <data name="ReadOnlyOnLockedFilesLabel.Text" xml:space="preserve">
     <value>Set read-only attribute on files locked by other users</value>
     <comment>Read-only on locked file label (settings)</comment>
@@ -252,6 +272,14 @@
   <data name="ReadOnlyOnLockedFilesLabelDescription.Text" xml:space="preserve">
     <value>Mark documents locked by other users as read-only for this user and vice versa. A read-only MS Office document opens in a view-only mode preventing document collisions.</value>
     <comment>Read-only on locked file description (settings)</comment>
+  </data>
+  <data name="RefreshExplorerOnFolderNavigationLabel.Text" xml:space="preserve">
+    <value>Refresh Explorer on folder navigation</value>
+    <comment>Refresh Explorer on folder navigation label (settings)</comment>
+  </data>
+  <data name="RefreshExplorerOnFolderNavigationLabelDescription.Text" xml:space="preserve">
+    <value>Automatically refresh Windows Explorer content when navigating to a folder. Disable this option if you experience performance issues during folder navigation.</value>
+    <comment>Refresh Explorer on folder navigation description (settings)</comment>
   </data>
   <data name="ManualLockTimeoutLabel.Text" xml:space="preserve">
     <value>Manual lock timeout (seconds)</value>
@@ -361,5 +389,69 @@
   <data name="TrayMaxHistoryItemsLabelDescription.Text" xml:space="preserve">
     <value>Controls the number of events in the tray window.</value>
     <comment>Tray max history items description (settings)</comment>
+  </data>
+  <data name="PushSynchronizationModeLabel.Text" xml:space="preserve">
+    <value>Push Synchronization Mode</value>
+    <comment>Push Synchronization Mode label text (Settings)</comment>
+  </data>
+  <data name="PushSynchronizationModeLabelDescription.Text" xml:space="preserve">
+    <value>Push synchronization mode of the engine.</value>
+    <comment>PushSynchronizationMode description text (Settings)</comment>
+  </data>
+  <data name="IncomingSyncAuto" xml:space="preserve">
+    <value>Auto</value>
+    <comment>IncomingSyncModeSetting.Auto friendly name</comment>
+  </data>
+  <data name="IncomingSyncOff" xml:space="preserve">
+    <value>Off</value>
+    <comment>IncomingSyncModeSetting.Off friendly name</comment>
+  </data>
+  <data name="IncomingSyncCRUD" xml:space="preserve">
+    <value>CRUD</value>
+    <comment>IncomingSyncModeSetting.CRUD friendly name</comment>
+  </data>
+  <data name="IncomingSyncTimerPooling" xml:space="preserve">
+    <value>Pooling</value>
+    <comment>IncomingSyncModeSetting.TimerPooling friendly name</comment>
+  </data>
+  <data name="IncomingSyncSyncId" xml:space="preserve">
+    <value>Sync ID</value>
+    <comment>IncomingSyncModeSetting.SyncId friendly name</comment>
+  </data>
+  <data name="VersionLabel" xml:space="preserve">
+    <value>version</value>
+    <comment>"version" word to show on About info</comment>
+  </data>
+  <data name="MainSettingsTab.Content" xml:space="preserve">
+    <value>Settings</value>
+    <comment>Settings main tab menu name</comment>
+  </data>
+  <data name="AboutSettingsTab.Content" xml:space="preserve">
+    <value>About</value>
+    <comment>Settings About tab menu name</comment>
+  </data>
+  <data name="MainSettingsTabHeader.Text" xml:space="preserve">
+    <value>Settings</value>
+    <comment>Settings main tab header</comment>
+  </data>
+  <data name="AboutSettingsTabHeader.Text" xml:space="preserve">
+    <value>About</value>
+    <comment>Settings About tab header</comment>
+  </data>
+  <data name="CopyTooltip.Content" xml:space="preserve">
+    <value>Copy path</value>
+    <comment>Copy button tooltip on Settings window</comment>
+  </data>
+  <data name="DisplayName.Text" xml:space="preserve">
+    <value>Display Name</value>
+    <comment>Display Name label text (Mount New Drive dialog)</comment>
+  </data>
+  <data name="DriveNameLabel.Text" xml:space="preserve">
+    <value>Drive Name</value>
+    <comment>Drive name label in Settings window</comment>
+  </data>
+  <data name="DriveNameLabelDescription.Text" xml:space="preserve">
+    <value>Drive name displaying in Windows Explorer</value>
+    <comment>Drive Name label description in Settings window</comment>
   </data>
 </root>

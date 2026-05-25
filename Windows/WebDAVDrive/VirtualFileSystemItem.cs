@@ -155,12 +155,12 @@ namespace WebDAVDrive
         {
             byte[] thumbnail = null;
 
-            string[] exts = Settings.RequestThumbnailsFor.Trim().Split("|");
+            string[] exts = Engine.DriveSettings.RequestThumbnailsFor.Trim().Split("|");
             string ext = System.IO.Path.GetExtension(UserFileSystemPath).TrimStart('.');
 
             if (exts.Any(ext.Equals) || exts.Any("*".Equals))
             {
-                string ThumbnailGeneratorUrl = Settings.ThumbnailGeneratorUrl.Replace("{thumbnail width}", size.ToString()).Replace("{thumbnail height}", size.ToString());
+                string ThumbnailGeneratorUrl = Engine.DriveSettings.ThumbnailGeneratorUrl.Replace("{thumbnail width}", size.ToString()).Replace("{thumbnail height}", size.ToString());
                 string filePathRemote = ThumbnailGeneratorUrl.Replace("{path to file}", Engine.Mapping.MapPath(UserFileSystemPath));
 
                 try
@@ -213,17 +213,17 @@ namespace WebDAVDrive
             if (operationContext.Properties.TryGetActiveLockInfo(out ServerLockInfo lockInfo))
             {
                 // Determine if the item is locked by this user or thirt-party user.
-                bool thisUser = Engine.IsCurrentUser(lockInfo.Owner);
-                string lockIconName = thisUser ? "Locked" : "LockedByAnotherUser";
+                bool thisDevice = operationContext.Properties.IsLockedByThisDevice(lockInfo);
+                string lockIconName = thisDevice ? "Locked" : "LockedByAnotherUser";
 
                 // Get Lock Mode.
-                if (thisUser && (lockInfo.Mode == LockMode.Auto))
+                if (thisDevice && (lockInfo.Mode == LockMode.Auto))
                 {
                     lockIconName += "Auto";
                 }
 
                 //If it's icon for current user (Locked or LockedAuto) and current theme is dark - use white icon
-                if (thisUser && ServiceProvider.IsDarkTheme)
+                if (thisDevice && ServiceProvider.IsDarkTheme)
                 {
                     lockIconName += "White";
                 }
@@ -241,7 +241,7 @@ namespace WebDAVDrive
                 FileSystemItemPropertyData propertyLockExpires = new FileSystemItemPropertyData()
                 {
                     Id = (int)CustomColumnIds.LockExpirationDate,
-                    Value = lockInfo.LockExpirationDateUtc.ToString(),
+                    Value = lockInfo.LockExpirationDateUtc,
                     IconResource = Path.Combine(Engine.IconsFolderPath, "Empty.ico")
                 };
                 props.Add(propertyLockExpires);
@@ -337,7 +337,7 @@ namespace WebDAVDrive
                     LockExpirationDateUtc = DateTimeOffset.Now.Add(lockInfo.TimeOut),
                     Mode = lockMode
                 };
-                operationContext.Properties.SetLockInfo(serverLockInfo);
+                operationContext.Properties.SetThisDeviceLockInfo(serverLockInfo);
 
                 // Update Windows Explorer.
                 placeholder.UpdateUI();
@@ -351,6 +351,13 @@ namespace WebDAVDrive
                     // Either 1 minute before, for release config, or 1/5 of a timeout time, for dev config.
                     double refreshTimeOut = lockInfo.TimeOut.TotalMilliseconds;
                     refreshTimeOut -= refreshTimeOut > 120000 ? 60000 : refreshTimeOut / 5;
+
+                    //Timer interval must be greater than 0. Skip refresh timer if timeout is too small.
+                    if (refreshTimeOut <= 0)
+                    {
+                        Logger.LogDebug($"Lock timeout is too small for refreshing timer: {lockInfo.TimeOut.TotalMilliseconds}ms", UserFileSystemPath, default, operationContext);
+                        return;
+                    }
 
                     System.Timers.Timer timer = new System.Timers.Timer(refreshTimeOut);
                     timer.AutoReset = false;

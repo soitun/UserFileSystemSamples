@@ -171,6 +171,7 @@ namespace VirtualDrive
                 engine.AutoLock = settings.AutoLock;
                 engine.MaxTransferConcurrentRequests = settings.MaxTransferConcurrentRequests.Value;
                 engine.MaxOperationsConcurrentRequests = settings.MaxOperationsConcurrentRequests.Value;
+                engine.RefreshExplorerOnFolderNavigation = settings.RefreshExplorerOnFolderNavigation;
 
                 // Set the remote storage item ID for the root item. It will be passed to the IEngine.GetFileSystemItemAsync()
                 // method as a remoteStorageItemId parameter when a root folder is requested.

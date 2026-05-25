@@ -111,6 +111,14 @@ namespace WebDAVDrive
             // We want the application to continue processing events, while engines are mounted and starting.
             _ = Task.Run(async () =>
             {
+                // Apply deployment configuration if present.
+                DeploymentConfigService deploymentConfigService = ServiceProvider.GetService<DeploymentConfigService>();
+                ApplyConfigResult configResult = await deploymentConfigService.TryApplyConfigurationAsync();
+                if (!configResult.Success)
+                {
+                    ServiceProvider.GetService<ILog>().Warn($"Deployment config issue: {configResult.ErrorMessage}");
+                }
+
                 // Init engines.                        
                 await domainsService.InitializeAsync((launchedArgs.Data as ProtocolActivatedEventArgs)?.Uri == null);
 
@@ -144,7 +152,7 @@ namespace WebDAVDrive
 #if !DEBUG
             if (!Windows.Storage.ApplicationData.Current.LocalSettings.Values.ContainsKey("StartupWindowDoNotShowAgain"))
             {
-                ServiceProvider.DispatcherQueue.TryEnqueue(() => new Startup());
+                ServiceProvider.DispatcherQueue.TryEnqueue(() => new Dialogs.Startup());
             }
 #endif
         }
@@ -152,8 +160,8 @@ namespace WebDAVDrive
         private void WindowClosed(object sender, WindowEventArgs args)
         {
             try
-            {
-                ServiceProvider.GetService<IDrivesService>().EnginesExitAsync().Wait();         
+            {           
+                ServiceProvider.GetService<IDrivesService>().EnginesExitAsync().GetAwaiter().GetResult();
                 // Explicitly call Dispose for LocalServer.
                 ServiceProvider.GetService<LocalServer>().Dispose();
                 if (ServiceProvider.Services is IServiceProvider serviceProvider)
@@ -173,6 +181,7 @@ namespace WebDAVDrive
 #if DEBUG
                 // Destroy Console.
                 FreeConsole();
+                Environment.Exit(0);
 #endif
             }
         }
@@ -197,6 +206,8 @@ namespace WebDAVDrive
             serviceCollection.AddSingleton<IToastNotificationService, ToastNotificationService>();
             serviceCollection.AddSingleton<IDrivesService, DrivesService>();
             serviceCollection.AddSingleton(options => new LogFormatter(ServiceProvider.GetService<ILog>(), ServiceProvider.GetService<AppSettings>().AppID));
+            serviceCollection.AddSingleton(options => new JsonConfigProvider(ServiceProvider.GetService<ILog>(), ServiceProvider.GetService<AppSettings>().AppID));
+            serviceCollection.AddSingleton<DeploymentConfigService>();
 
             return serviceCollection.BuildServiceProvider();
         }

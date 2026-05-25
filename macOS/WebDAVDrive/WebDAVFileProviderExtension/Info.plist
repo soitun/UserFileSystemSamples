@@ -54,7 +54,7 @@
 			</dict>
 		</array>
 		<key>NSExtensionFileProviderDocumentGroup</key>
-		<string>H9B9JEKY3W.group.com.webdav.vfs</string>
+		<string>group.com.webdav.vfs</string>
 		<key>NSFileProviderDecorations</key>
 		<array>
 			<dict>

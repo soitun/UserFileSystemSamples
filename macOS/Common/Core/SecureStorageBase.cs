@@ -44,8 +44,25 @@ namespace Common.Core
             }
 
             // Because secure storage requires provisioning profile, in case of the development mode, we store credentials in external file.
-            string userDataPath = Path.Combine(GetSharedContainerPath(), InternalSettingFile);
-            Dictionary<string, string> userData = File.Exists(userDataPath) ? JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(userDataPath)) : new Dictionary<string, string>();
+            string userDataPath = GetUserDataPath();
+            if (string.IsNullOrWhiteSpace(userDataPath))
+            {
+                new ConsoleLogger(GetType().Name).LogDebug("Path to user's settings file is empty.");
+                return;
+            }
+
+            Dictionary<string, string> userData;
+            try
+            {
+                userData = File.Exists(userDataPath)
+                    ? JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(userDataPath)) ?? new Dictionary<string, string>()
+                    : new Dictionary<string, string>();
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException || ex is JsonException)
+            {
+                new ConsoleLogger(GetType().Name).LogError("Get value failed.", ex: ex); 
+                return;
+            }
 
             if (userData.ContainsKey(key))
             {
@@ -56,7 +73,15 @@ namespace Common.Core
                 userData.Add(key, value);
             }
 
-            await File.WriteAllTextAsync(userDataPath, JsonSerializer.Serialize(userData));
+            try
+            {
+                await File.WriteAllTextAsync(userDataPath, JsonSerializer.Serialize(userData));
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+            {
+                new ConsoleLogger(GetType().Name).LogError("Set value failed.", ex: ex);
+                return;
+            }
         }
 
         /// <summary>
@@ -77,30 +102,36 @@ namespace Common.Core
         /// <returns></returns>
         public async Task<string> GetAsync(string key, bool useDomainIdentifier = true)
         {
-            string userDataPath = Path.Combine(GetSharedContainerPath(), InternalSettingFile);
-            if (File.Exists(userDataPath))
-            {
-                string settingsContent = await File.ReadAllTextAsync(userDataPath);
-                Dictionary<string, string> userData = JsonSerializer.Deserialize<Dictionary<string, string>>(settingsContent);
-
-                if (!string.IsNullOrEmpty(domainIdentifier) && useDomainIdentifier)
-                {
-                    key = $"{domainIdentifier}-{key}";
-                }
-
-                if (userData.ContainsKey(key))
-                {
-                    return userData[key];
-                }
-                else
-                {
-                    return null;
-                }
-            }
-            else
+            string userDataPath = GetUserDataPath();
+            if (string.IsNullOrWhiteSpace(userDataPath))
             {
                 return null;
             }
+
+            try
+            {
+                if (File.Exists(userDataPath))
+                {
+                    string settingsContent = await File.ReadAllTextAsync(userDataPath);
+                    Dictionary<string, string> userData = JsonSerializer.Deserialize<Dictionary<string, string>>(settingsContent);
+
+                    if (!string.IsNullOrEmpty(domainIdentifier) && useDomainIdentifier)
+                    {
+                        key = $"{domainIdentifier}-{key}";
+                    }
+
+                    if (userData != null && userData.ContainsKey(key))
+                    {
+                        return userData[key];
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException || ex is JsonException)
+            {
+                return null;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -118,6 +149,12 @@ namespace Common.Core
         public string GetSharedContainerPath()
         {
             return NSFileManager.DefaultManager.GetContainerUrl(appGroupId)?.Path;
+        }
+
+        private string GetUserDataPath()
+        {
+            string sharedContainerPath = GetSharedContainerPath();
+            return string.IsNullOrWhiteSpace(sharedContainerPath) ? null : Path.Combine(sharedContainerPath, InternalSettingFile);
         }
 
         /// <summary>
